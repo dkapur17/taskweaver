@@ -3,7 +3,7 @@ from typing import Optional, Tuple, List
 from datasets import Dataset
 from string import Formatter
 from tqdm import tqdm
-from .eval_config import EvaluationConfig, EvaluationResult
+from .eval_configs import EvaluationConfig, EvaluationResult
 
 class Task:
     def __init__(

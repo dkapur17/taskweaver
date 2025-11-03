@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from datetime import datetime
 from .task import Task
-from .eval_config import EvaluationResult
+from .eval_configs import EvaluationResult
 
 @dataclass
 class EvaluatorSummary:

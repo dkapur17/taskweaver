@@ -197,7 +197,7 @@ class NumericConfig(EvaluationConfig):
         for pred, ref in zip(predictions, references):
             if pred is not None:
                 answered += 1
-                if abs(pred - ref) < self.tolerance:
+                if abs(pred - ref) <= self.tolerance:
                     correct += 1
         
         total = len(predictions)
