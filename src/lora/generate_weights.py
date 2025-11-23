@@ -2,7 +2,7 @@ from typing import Optional, Any, Dict
 
 from transformers import BitsAndBytesConfig, AutoModelForCausalLM, AutoTokenizer, AutoConfig, TrainingArguments
 from datasets import load_dataset
-from peft import LoraConfig
+from peft import LoraConfig, get_peft_model
 from trl import SFTTrainer
 import torch
 
@@ -33,31 +33,32 @@ class LORA_Finetune:
         self.eval_dataset = None
         self.model = None
         self.tokenizer = None
+    
+    OUTPUT_DIR = "lora_weights"
 
     def load_model_and_tokenizer(self) -> None:
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, use_fast=True)
 
-        bnb_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16,
-            bnb_4bit_use_double_quant=True,
-            bnb_4bit_quant_storage=torch.bfloat16,
-        )
+        # bnb_config = BitsAndBytesConfig(
+        #     load_in_4bit=True,
+        #     bnb_4bit_quant_type="nf4",
+        #     bnb_4bit_compute_dtype=torch.float16,
+        # )
 
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
-            quantization_config=bnb_config,
-            torch_dtype=torch.bfloat16,
+            # quantization_config=bnb_config,
+            device_map="auto",
         )
+        self.model = get_peft_model(self.model, self.peft_config)
+        self.model.print_trainable_parameters()
     
-    def load_dataset(self, build_text, split: str = "train") -> None:
+    def load_dataset(self, split: str = "train") -> None:
         if self.dataset_subset:
             dataset = load_dataset(self.dataset_name, self.dataset_subset, split=split)
         else:
             dataset = load_dataset(self.dataset_name, split=split)
 
-        dataset = dataset.map(build_text)
         print("Sample data:", dataset[0])
         
         train_test_split = dataset.train_test_split(test_size=0.1, seed=42)
@@ -65,18 +66,18 @@ class LORA_Finetune:
         self.eval_dataset = train_test_split["test"]
 
 
-    def train(self) -> None:
+    def train(self, formatting_func) -> None:
 
         assert self.model is not None, "Model not loaded. Call load_model_and_tokenizer() first."
         assert self.train_dataset is not None, "Dataset not loaded. Call load_dataset() first."
 
-        output_dir = self.model_name.replace("/", "-") + "-lora-finetuned-" + self.dataset_name.replace("/", "-")
+        output_dir = self.OUTPUT_DIR + "/" + self.model_name.replace("/", "-") + "-lora-finetuned-" + self.dataset_name.replace("/", "-")
 
         training_arguments = TrainingArguments(
             max_steps=1000,
-            per_device_train_batch_size=4,
-            gradient_accumulation_steps=4,
-            learning_rate=2e-4,
+            per_device_train_batch_size=2,
+            gradient_accumulation_steps=2,
+            learning_rate=2e-5,
             bf16=True,
             logging_steps=10,
             output_dir=output_dir,
@@ -89,8 +90,8 @@ class LORA_Finetune:
             model=self.model,
             train_dataset=self.train_dataset,
             eval_dataset=self.eval_dataset,
-            peft_config=self.peft_config,
             processing_class=self.tokenizer,
+            formatting_func=formatting_func,
             args=training_arguments,
         )
         trainer.train()
@@ -111,7 +112,7 @@ if __name__ == "__main__":
         dataset_name="allenai/ai2_arc",
         dataset_subset="ARC-Easy",
     )
-    def build_text(example):
+    def process_sample(example):
         q = example["question"]
         labels = example["choices"]["label"]
         texts = example["choices"]["text"]
@@ -119,16 +120,15 @@ if __name__ == "__main__":
         # Build the multiple-choice block
         mc_block = "\n".join([f"{label}. {txt}" for label, txt in zip(labels, texts)])
 
-        # The answer is a letter like "B"
         answer = example["answerKey"]
 
-        example["text"] = (
+        text = (
             f"Question: {q}\n"
             f"{mc_block}\n\n"
             f"Answer: {answer}"
         )
-        return example
+        return text
 
     lora_finetuner.load_model_and_tokenizer()
-    lora_finetuner.load_dataset(build_text)
-    lora_finetuner.train()
+    lora_finetuner.load_dataset()
+    lora_finetuner.train(process_sample)
