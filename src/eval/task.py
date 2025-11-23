@@ -13,7 +13,8 @@ class Task:
             user_template: str,
             assistant_template: str,
             system_prompt: Optional[str] = None,
-            eval_config: Optional[EvaluationConfig] = None
+            eval_config: Optional[EvaluationConfig] = None,
+            is_chat_task: bool = True
     ):
 
         self.task_name = task_name  
@@ -21,11 +22,12 @@ class Task:
         self.assistant_template = assistant_template
         self.system_prompt = system_prompt
         self.eval_config = eval_config
+        self.is_chat_task = is_chat_task
 
         self.dataset = dataset
-        self._chatify_dataset()
+        self._prepare_dataset()
 
-    def _chatify_dataset(self) -> None:
+    def _prepare_dataset(self) -> None:
 
         user_template_fields = [field_name for _, field_name, _, _ in Formatter().parse(self.user_template) if field_name is not None]
         assistant_template_fields = [field_name for _, field_name, _, _ in Formatter().parse(self.assistant_template) if field_name is not None]
@@ -46,11 +48,18 @@ class Task:
                 user_vals_row = {field:user_field_vals[field][i] for field in user_template_fields}
                 assistant_vals_row = {field:assistant_field_vals[field][i] for field in assistant_template_fields}
 
-                X = [{"role": "user", "content": self.user_template.format_map(user_vals_row)}]
-                y = [{"role": "assistant", "content": self.assistant_template.format_map(assistant_vals_row)}]
+                if self.is_chat_task:
+                    X = [{"role": "user", "content": self.user_template.format_map(user_vals_row)}]
+                    y = [{"role": "assistant", "content": self.assistant_template.format_map(assistant_vals_row)}]
 
-                if self.system_prompt:
-                    X.insert(0, {"role": "system", "content": self.system_prompt})
+                    if self.system_prompt:
+                        X.insert(0, {"role": "system", "content": self.system_prompt})
+                else:
+                    prompt = self.user_template.format_map(user_vals_row)
+                    if self.system_prompt:
+                        prompt = f"{self.system_prompt}\n\n{prompt}"
+                    X = prompt
+                    y = self.assistant_template.format_map(assistant_vals_row)
                 
                 X_batch.append(X)
                 y_batch.append(y)
@@ -68,13 +77,21 @@ class Task:
         refs = []
         preds = []
         for batch in pbar:
-            model_input_texts = tokenizer.apply_chat_template(batch['X'], 
-                                                         tokenize=False, 
-                                                         add_generation_prompt=True, 
-                                                         enable_thinking=False)
-            model_inputs = tokenizer(model_input_texts, return_tensors='pt', padding=True).to(model.device)
-            y = [row[0]['content'] for row in batch['y']]
+            if self.is_chat_task:
+                model_input_texts = tokenizer.apply_chat_template(batch['X'], 
+                                                            tokenize=False, 
+                                                            add_generation_prompt=True, 
+                                                            enable_thinking=False)
+                y = [row[0]['content'] for row in batch['y']]
+            else:
+                model_input_texts = batch['X']
+                y = batch['y']
 
+            if tokenizer.pad_token is None:
+                tokenizer.pad_token = tokenizer.eos_token
+
+            model_inputs = tokenizer(model_input_texts, return_tensors='pt', padding=True).to(model.device)
+            
             model_outputs = model.generate(**model_inputs, max_new_tokens=max_new_tokens)
             
             preds_batch = []
@@ -86,6 +103,7 @@ class Task:
             refs.extend(y)
             preds.extend(preds_batch)
 
+        print(f"\nPreds = {preds}\nRefs = {refs}\n")
         return preds, refs
 
     def evaluate(self, model, tokenizer, batch_size:int=64, max_new_tokens:int=32768, progress:bool=False) -> EvaluationResult:
