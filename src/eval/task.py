@@ -103,9 +103,9 @@ class Task:
             refs.extend(y)
             preds.extend(preds_batch)
 
-            print("\nInputs: ", model_input_texts)
-            print("\nReferences: ", refs)
-            print("\nPredictions: ", preds)
+            # print("\nInputs: ", model_input_texts)
+            # print("\nReferences: ", refs)
+            # print("\nPredictions: ", preds)
 
         return preds, refs
 
