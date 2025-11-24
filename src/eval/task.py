@@ -68,7 +68,7 @@ class Task:
         
         self.dataset = self.dataset.map(build_messages, batched=True, remove_columns=self.dataset.column_names)
 
-    def _get_preds_and_refs(self, model, tokenizer, batch_size:int=64, max_new_tokens:int=32768, progress:bool=False) -> Tuple[List[str], List[str]]:
+    def _get_preds_and_refs(self, model, tokenizer, batch_size:int=64, max_new_tokens:int=32768, temperature:float=1.0, progress:bool=False) -> Tuple[List[str], List[str]]:
         if progress:
             pbar = tqdm(self.dataset.iter(batch_size), total=self.dataset.num_rows//batch_size + 1)
         else:
@@ -92,7 +92,7 @@ class Task:
 
             model_inputs = tokenizer(model_input_texts, return_tensors='pt', padding=True).to(model.device)
             
-            model_outputs = model.generate(**model_inputs, max_new_tokens=max_new_tokens)
+            model_outputs = model.generate(**model_inputs, max_new_tokens=max_new_tokens, temperature=temperature, do_sample=True)
             
             preds_batch = []
             for i, output in enumerate(model_outputs):
@@ -103,12 +103,15 @@ class Task:
             refs.extend(y)
             preds.extend(preds_batch)
 
-        print(f"\nPreds = {preds}\nRefs = {refs}\n")
+            print("\nInputs: ", model_input_texts)
+            print("\nReferences: ", refs)
+            print("\nPredictions: ", preds)
+
         return preds, refs
 
-    def evaluate(self, model, tokenizer, batch_size:int=64, max_new_tokens:int=32768, progress:bool=False) -> EvaluationResult:
+    def evaluate(self, model, tokenizer, batch_size:int=64, max_new_tokens:int=32768, temperature:float=1.0, progress:bool=False) -> EvaluationResult:
         
-        preds, refs = self._get_preds_and_refs(model, tokenizer, batch_size, max_new_tokens, progress)
+        preds, refs = self._get_preds_and_refs(model, tokenizer, batch_size, max_new_tokens, temperature, progress)
 
         if self.eval_config:
             return self.eval_config(preds, refs)

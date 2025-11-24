@@ -44,6 +44,7 @@ class Evaluator:
         tokenizer,
         batch_size: int = 16,
         max_new_tokens: int = 128,
+        temperature: float = 1.0,
         progress: bool = True,
         task_specific_kwargs: Optional[Dict[str, dict]] = None
     ) -> Dict[str, EvaluationResult]:
@@ -55,9 +56,10 @@ class Evaluator:
             tokenizer: Tokenizer for the model
             batch_size: Default batch size for all tasks
             max_new_tokens: Default max new tokens for all tasks
+            temperature: Default temperature for generation (0.0=deterministic, 1.0=standard)
             progress: Show progress bars during evaluation
             task_specific_kwargs: Dict mapping task names to specific kwargs
-                Example: {'GSM8K': {'max_new_tokens': 512}}
+                Example: {'GSM8K': {'max_new_tokens': 512, 'temperature': 0.7}}
         
         Returns:
             Dictionary mapping task names to EvaluationResults
@@ -79,6 +81,7 @@ class Evaluator:
             kwargs = {
                 'batch_size': batch_size,
                 'max_new_tokens': max_new_tokens,
+                'temperature': temperature,
                 'progress': progress
             }
             if task.task_name in task_specific_kwargs:
