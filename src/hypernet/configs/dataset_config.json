@@ -1,0 +1,7 @@
+[
+  {
+    "name": "gsm8k",
+    "dataset_path": "openai/gsm8k",
+    "dataset_config": "main"
+  }
+]
