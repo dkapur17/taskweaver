@@ -1,0 +1,59 @@
+{
+  "summary": {
+    "num_tasks": 4,
+    "total_samples": 1274,
+    "average_accuracy": 0.22329386299974535,
+    "task_accuracies": {
+      "gsm8k": 0.10606060606060606,
+      "snli": 0.3333333333333333,
+      "squad_v2": 0.0,
+      "arc_easy": 0.453781512605042
+    },
+    "timestamp": "2025-11-24T10:40:17.866016"
+  },
+  "results": {
+    "gsm8k": {
+      "eval_type": "NUMERICAL",
+      "metrics": {
+        "accuracy": 0.10606060606060606,
+        "answered_rate": 1.0,
+        "correct": 7,
+        "answered": 66,
+        "total": 66
+      },
+      "num_samples": 66
+    },
+    "snli": {
+      "eval_type": "MULTIPLE_CHOICE",
+      "metrics": {
+        "accuracy": 0.3333333333333333,
+        "answered_rate": 0.9939393939393939,
+        "correct": 165,
+        "answered": 492,
+        "total": 495
+      },
+      "num_samples": 495
+    },
+    "squad_v2": {
+      "eval_type": "EXACT_MATCH",
+      "metrics": {
+        "accuracy": 0.0,
+        "exact_match": 0.0,
+        "correct": 0,
+        "total": 594
+      },
+      "num_samples": 594
+    },
+    "arc_easy": {
+      "eval_type": "MULTIPLE_CHOICE",
+      "metrics": {
+        "accuracy": 0.453781512605042,
+        "answered_rate": 1.0,
+        "correct": 54,
+        "answered": 119,
+        "total": 119
+      },
+      "num_samples": 119
+    }
+  }
+}
