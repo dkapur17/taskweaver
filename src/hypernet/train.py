@@ -88,7 +88,7 @@ def parse_args():
     parser.add_argument(
         '--lora_alpha',
         type=int,
-        default=16,
+        default=8,
         help='Scaling factor for LoRA'
     )
     parser.add_argument(
@@ -132,6 +132,11 @@ def parse_args():
         help='Training batch size per device'
     )
     parser.add_argument(
+        '--use_fp16',
+        action='store_false',
+        help='Whether to use FP16 during training'
+    )
+    parser.add_argument(
         '--gradient_accumulation_steps',
         type=int,
         default=1,
@@ -160,11 +165,6 @@ def parse_args():
         type=int,
         default=10000,
         help='Number of steps between checkpoints'
-    )
-    parser.add_argument(
-        '--fp16',
-        action='store_true',
-        help='Use mixed precision training'
     )
     parser.add_argument(
         '--tensorboard_dir',
@@ -302,12 +302,13 @@ def main():
         num_train_epochs=args.num_epochs,
         logging_steps=args.logging_steps,
         save_steps=args.save_steps,
-        fp16=args.fp16,
+        fp16=False,
         remove_unused_columns=False,
-        dataloader_num_workers=0,
+        dataloader_num_workers=4,
         dataloader_pin_memory=False,
         report_to=['tensorboard'],
         logging_dir=args.tensorboard_dir,
+        warmup_ratio=0.1
     )
 
     # Create TensorBoard callback
