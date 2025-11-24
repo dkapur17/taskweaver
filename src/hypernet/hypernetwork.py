@@ -105,6 +105,11 @@ class TaskWeaver(nn.Module):
         })
 
         self._init_weights()
+        self._freeze_lm()
+
+    def _freeze_lm(self) -> None:
+        for param in self.lm.parameters():
+            param.requires_grad = False
 
     def _init_weights(self):
         # Initialize MLP layers with smaller weights
