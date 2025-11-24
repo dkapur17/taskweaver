@@ -11,7 +11,7 @@ class LORA_Finetune:
     def __init__(self, model_name: str,
                  dataset_name: str,
                  dataset_subset: Optional[str] = None,
-                 lora_rank: int = 8,
+                 lora_rank: int = 2,
                  lora_alpha: int = 32,
                  lora_dropout: float = 0.05,
                  ):
@@ -53,20 +53,22 @@ class LORA_Finetune:
         self.model = get_peft_model(self.model, self.peft_config)
         self.model.print_trainable_parameters()
     
-    def load_dataset(self, split: str = "train") -> None:
+    def load_dataset(self, split: str = "train", formatting_func=None) -> None:
+        assert self.tokenizer is not None, "Tokenizer not loaded. Call load_model_and_tokenizer() first."
+
         if self.dataset_subset:
             dataset = load_dataset(self.dataset_name, self.dataset_subset, split=split)
         else:
             dataset = load_dataset(self.dataset_name, split=split)
-
-        print("Sample data:", dataset[0])
         
+        dataset = dataset.map(formatting_func, remove_columns=dataset.column_names)
+
         train_test_split = dataset.train_test_split(test_size=0.1, seed=42)
         self.train_dataset = train_test_split["train"]
         self.eval_dataset = train_test_split["test"]
 
 
-    def train(self, formatting_func) -> None:
+    def train(self) -> None:
 
         assert self.model is not None, "Model not loaded. Call load_model_and_tokenizer() first."
         assert self.train_dataset is not None, "Dataset not loaded. Call load_dataset() first."
@@ -74,15 +76,15 @@ class LORA_Finetune:
         output_dir = self.OUTPUT_DIR + "/" + self.model_name.replace("/", "-") + "-lora-finetuned-" + self.dataset_name.replace("/", "-")
 
         training_arguments = TrainingArguments(
-            max_steps=1000,
+            max_steps=500,
             per_device_train_batch_size=2,
             gradient_accumulation_steps=2,
-            learning_rate=2e-5,
+            learning_rate=5e-5,
             bf16=True,
             logging_steps=10,
             output_dir=output_dir,
             save_total_limit=2,
-            save_steps=200,
+            save_steps=50,
             remove_unused_columns=False,
         )
 
@@ -91,7 +93,6 @@ class LORA_Finetune:
             train_dataset=self.train_dataset,
             eval_dataset=self.eval_dataset,
             processing_class=self.tokenizer,
-            formatting_func=formatting_func,
             args=training_arguments,
         )
         trainer.train()
@@ -108,7 +109,7 @@ class LORA_Finetune:
 
 if __name__ == "__main__":
     lora_finetuner = LORA_Finetune(
-        model_name="google/gemma-3-270m",
+        model_name="google/gemma-3-270m-it",
         dataset_name="allenai/ai2_arc",
         dataset_subset="ARC-Easy",
     )
@@ -116,19 +117,16 @@ if __name__ == "__main__":
         q = example["question"]
         labels = example["choices"]["label"]
         texts = example["choices"]["text"]
-
-        # Build the multiple-choice block
         mc_block = "\n".join([f"{label}. {txt}" for label, txt in zip(labels, texts)])
-
         answer = example["answerKey"]
-
         text = (
+            f"Answer the multiple-choice question based on the provided options.\n\n"
             f"Question: {q}\n"
             f"{mc_block}\n\n"
             f"Answer: {answer}"
         )
-        return text
+        return {"text": text}
 
     lora_finetuner.load_model_and_tokenizer()
-    lora_finetuner.load_dataset()
-    lora_finetuner.train(process_sample)
+    lora_finetuner.load_dataset(formatting_func=process_sample)
+    lora_finetuner.train()
