@@ -31,13 +31,13 @@ def lora_ai2_arc_finetune(model_name, chat: bool = False):
             ]
         }
         else:
-            text = (
+            text = {"text": (
                 f"Answer the multiple-choice question based on the provided options.\n\n"
                 f"Question: {q}\n"
                 f"{mc_block}\n\n"
                 f"Answer: {answer}"
-            )
-        return {"text": text}
+            )}
+        return text
     
     lora_finetuner.load_model_and_tokenizer()
     lora_finetuner.load_dataset(formatting_func=process_sample)
@@ -71,12 +71,12 @@ def lora_openai_gsm8k(model_name, chat: bool = False):
                 ]
             }
         else:
-            text = (
+            text = {"text": (
                 f"Solve the given math problem by thinking step by step.\n\n"
                 f"Question: {question}\n"
                 f"Answer: {answer}"
-            )
-        return {"text": text}
+            )}
+        return text
     lora_finetuner.load_model_and_tokenizer()
     lora_finetuner.load_dataset(formatting_func=process_sample)
     lora_finetuner.train()
@@ -85,7 +85,6 @@ def lora_hella_swag(model_name, chat: bool = False):
     lora_finetuner = LORA_Finetune(
         model_name=model_name,
         dataset_name="Rowan/hellaswag",
-        dataset_subset="train",
     )
     
     def process_sample(example):
@@ -113,13 +112,13 @@ def lora_hella_swag(model_name, chat: bool = False):
                 ]
             }
         else:
-            text = (
-                f"Choose the most plausible continuation for the given context.\n\n"
+            text = {"text": 
+                (f"Choose the most plausible continuation for the given context.\n\n"
                 f"Context: {context}\n"
                 f"Options: {mc_block}\n\n"
-                f"Answer: {label}."
-            )
-        return {"text": text}
+                f"Answer: {label}.")
+            }
+        return text
     lora_finetuner.load_model_and_tokenizer()
     lora_finetuner.load_dataset(formatting_func=process_sample)
     lora_finetuner.train()

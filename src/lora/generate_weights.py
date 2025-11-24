@@ -119,13 +119,23 @@ if __name__ == "__main__":
         texts = example["choices"]["text"]
         mc_block = "\n".join([f"{label}. {txt}" for label, txt in zip(labels, texts)])
         answer = example["answerKey"]
-        text = (
-            f"Answer the multiple-choice question based on the provided options.\n\n"
-            f"Question: {q}\n"
-            f"{mc_block}\n\n"
-            f"Answer: {answer}"
-        )
-        return {"text": text}
+        text = {
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "Choose the most plausible continuation for the given context."
+                },
+                {
+                    "role": "user",
+                    "content": f"Question: {q}\nOptions:\n{mc_block}\n\nAnswer: "
+                },
+                {
+                    "role": "assistant",
+                    "content": f"{answer}."
+                }
+            ]
+        }
+        return text
 
     lora_finetuner.load_model_and_tokenizer()
     lora_finetuner.load_dataset(formatting_func=process_sample)
