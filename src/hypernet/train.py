@@ -282,6 +282,8 @@ def main():
     # Move model to specified device
     hypernet = hypernet.to(device)
 
+    hypernet.print_trainable_parameters()
+
     # Prepare dataset
     dataset_config = None if args.use_default_dataset else args.dataset_config
     train_dataset = prepare_dataset(tokenizer, dataset_config)
