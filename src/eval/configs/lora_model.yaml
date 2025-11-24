@@ -1,0 +1,32 @@
+# LoRA model evaluation config
+model_name: "lora-model"
+is_chat_model: false
+base_model_name: "google/gemma-3-270m"
+lora_adapter_path: "sweelol/lora-gemma3-270m-dolly"
+
+batch_size: 8
+max_new_tokens: 128
+
+datasets:
+  gsm8k:
+    enabled: true
+    split: "test[:]"
+    max_new_tokens: 256
+  
+  # snli:
+  #   enabled: true
+  #   split: "test[:5%]"
+  #   max_new_tokens: 10
+  
+  # squad_v2:
+  #   enabled: true
+  #   split: "validation[:5%]"
+  #   max_new_tokens: 64
+  
+  # arc_easy:
+  #   enabled: true
+  #   split: "test[:5%]"
+  #   max_new_tokens: 10
+
+output_path: "results/{model_name}/{timestamp}.json"
+include_predictions: false

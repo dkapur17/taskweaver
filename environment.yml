@@ -8,6 +8,7 @@ dependencies:
   - pip:
     - torch
     - transformers
+    - peft
     - datasets
     - tqdm
     - accelerate

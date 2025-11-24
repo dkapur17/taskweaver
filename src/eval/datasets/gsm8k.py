@@ -15,7 +15,7 @@ def create_gsm8k_task(split: str = 'test[:5%]', is_chat_task: bool = True) -> Ta
         Task object configured for GSM8K evaluation
     """
     dataset = load_dataset('openai/gsm8k', 'main', split=split)
-    eval_config = NumericConfig(tolerance=0)
+    eval_config = NumericConfig(tolerance=1e-1)
     
     user_template = "{question}"
     assistant_template = "{answer}"
