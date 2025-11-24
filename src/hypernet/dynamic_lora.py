@@ -58,6 +58,19 @@ class DynamicLoraLinear(nn.Linear):
         self.B = None
         self.reset_parameters()
 
+    def replicate(self, target: nn.Linear) -> None:
+        """
+        Replicate the parameters of a target nn.Linear
+
+        Args:
+            target (nn.Linear): Linear layer to copy weight and bias from
+        """
+        assert isinstance(target, nn.Linear), "Can only replicate nn.Linear"
+
+        self.weight.data = target.weight.data
+        if self.bias is not None:
+            self.bias.data = target.bias.data
+
     def set_lora_paramters(self, A: torch.Tensor, B: torch.Tensor) -> None:
         """
         Set the LoRA parameters for the current forward pass.
@@ -68,6 +81,7 @@ class DynamicLoraLinear(nn.Linear):
         """
         self.A = A
         self.B = B
+
 
     def unset_lora_parameters(self) -> None:
         """Clear the LoRA parameters."""

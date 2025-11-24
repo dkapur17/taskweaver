@@ -104,8 +104,8 @@ class TaskWeaver(nn.Module):
             }) for module_name in self.lora_target_layers
         })
 
-        self._init_weights()
         self._freeze_lm()
+        self._init_weights()
 
     def _freeze_lm(self) -> None:
         for param in self.lm.parameters():
@@ -188,15 +188,16 @@ class TaskWeaver(nn.Module):
 
                 in_features[attribute] = linear_ref.in_features
                 out_features[attribute] = linear_ref.out_features
+                
+                dynamic_lora_layer = dynamic_lora_fn(
+                                        in_features=linear_ref.in_features, 
+                                        out_features=linear_ref.out_features, 
+                                        bias=linear_ref.bias is not None
+                                    )
+                
+                dynamic_lora_layer.replicate(linear_ref)
+                setattr(parent_ref, attribute, dynamic_lora_layer)
 
-                setattr(
-                    parent_ref,
-                    attribute,
-                    dynamic_lora_fn(
-                        in_features=linear_ref.in_features,
-                        out_features=linear_ref.out_features
-                    )
-                )
                 references[i][attribute] = getattr(parent_ref, attribute)
 
         return references, in_features, out_features
@@ -351,6 +352,7 @@ class TaskWeaver(nn.Module):
 
         return outputs
 
+    @torch.no_grad
     def generate(
         self,
         input_ids: torch.Tensor,
@@ -510,3 +512,19 @@ class TaskWeaver(nn.Module):
     def device(self) -> torch.device:
         """Get the device of the language model."""
         return self.lm.device
+    
+    def print_trainable_parameters(self):
+        """Print the number of trainable parameters in the model."""
+        trainable_params = 0
+        all_params = 0
+        
+        print("\n=== Trainable Parameters ===")
+        for name, param in self.named_parameters():
+            all_params += param.numel()
+            if param.requires_grad:
+                trainable_params += param.numel()
+                print(f"✓ {name}: {param.numel():,}")
+        
+        print(f"\nTotal params: {all_params:,}")
+        print(f"Trainable params: {trainable_params:,}")
+        print(f"Trainable %: {100 * trainable_params / all_params:.2f}%")
