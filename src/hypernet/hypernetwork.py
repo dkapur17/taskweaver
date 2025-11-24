@@ -8,6 +8,7 @@ LoRA weights dynamically based on the input prompt.
 import os
 import json
 import torch
+import numpy as np
 import torch.nn as nn
 from typing import List, Dict, Tuple, Optional, Literal
 from operator import attrgetter
@@ -62,8 +63,8 @@ class TaskWeaver(nn.Module):
         self.lm_hidden_dim = self.lm.config.hidden_size
 
         # Get reference to the layers module
-        self.lm_layers_ref = self.get_layers_ref(layers_module_name)
-        assert isinstance(self.lm_layers_ref, nn.ModuleList), "Layers must be an nn.ModuleList"
+        lm_layers_ref = self.get_layers_ref(layers_module_name)
+        assert isinstance(lm_layers_ref, nn.ModuleList), "Layers must be an nn.ModuleList"
 
         # Create partial function for DynamicLoraLinear
         dynamic_lora_fn = partial(
@@ -76,7 +77,7 @@ class TaskWeaver(nn.Module):
 
         # Replace target linear layers with DynamicLoraLinear
         self.module_references, self.in_features, self.out_features = self.replace_linears(
-            self.lora_target_layers, self.lm_layers_ref, dynamic_lora_fn
+            self.lora_target_layers, lm_layers_ref, dynamic_lora_fn
         )
 
         # Hypernetwork components
@@ -102,6 +103,32 @@ class TaskWeaver(nn.Module):
                 'B': nn.Linear(hidden_dim, self.out_features[module_name] * self.lora_rank)
             }) for module_name in self.lora_target_layers
         })
+
+        self._init_weights()
+
+    def _init_weights(self):
+        # Initialize MLP layers with smaller weights
+        for module in [self.semantic_proj, self.mlp]:
+            if isinstance(module, nn.Linear):
+                nn.init.normal_(module.weight, std=0.02)
+                if module.bias is not None:
+                    nn.init.zeros_(module.bias)
+        
+        # Initialize output heads to produce small initial LoRA weights
+        for module_name in self.lora_target_layers:
+            for matrix_name in ['A', 'B']:
+                head = self.heads[module_name][matrix_name]
+                nn.init.zeros_(head.weight)  # Start with zero weights
+                
+                if matrix_name == 'A':
+                    # Small random bias for A matrix
+                    if hasattr(head, 'bias') and head.bias is not None:
+                        nn.init.uniform_(head.bias, -1/(np.sqrt(2) * self.in_features[module_name]), 
+                                                    1/(np.sqrt(2) * self.in_features[module_name]))
+                else:  # B matrix
+                    # Zero bias for B matrix (standard LoRA init)
+                    if hasattr(head, 'bias') and head.bias is not None:
+                        nn.init.zeros_(head.bias)
 
     def get_layers_ref(self, layers_module_name: str) -> nn.Module:
         """
