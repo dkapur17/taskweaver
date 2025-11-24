@@ -121,6 +121,7 @@ def main():
         split = dataset_config.get('split', 'test[:5%]')
         batch_size = dataset_config.get('batch_size', config.get('batch_size', 8))
         max_new_tokens = dataset_config.get('max_new_tokens', config.get('max_new_tokens', 128))
+        temperature = dataset_config.get('temperature', config.get('temperature', 1.0))
         
         print(f"  Loading {dataset_name} (split={split})")
         
@@ -130,7 +131,8 @@ def main():
         
         task_specific_kwargs[task.task_name] = {
             'batch_size': batch_size,
-            'max_new_tokens': max_new_tokens
+            'max_new_tokens': max_new_tokens,
+            'temperature': temperature
         }
     
     if not tasks:
