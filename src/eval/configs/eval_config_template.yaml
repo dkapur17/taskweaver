@@ -1,0 +1,41 @@
+# Evaluation Configuration Template
+# Copy this file and customize for your evaluation runs
+
+# Model configuration
+model_name: "Qwen/Qwen3-0.6B"  # HuggingFace model identifier
+is_chat_model: true  # Set to false for base/completion models
+
+# Global settings
+batch_size: 8  # Default batch size for all datasets
+max_new_tokens: 128  # Default max tokens to generate
+
+# Dataset configurations
+# Set enabled: false to skip a dataset
+datasets:
+  gsm8k:
+    enabled: true
+    split: "test[:5%]"  # Use percentage or absolute count, e.g., "test[:100]"
+    batch_size: 8  # Override global batch_size if needed
+    max_new_tokens: 256  # Math problems may need more tokens
+  
+  snli:
+    enabled: true
+    split: "test[:5%]"
+    batch_size: 16  # Classification can use larger batches
+    max_new_tokens: 10  # Only need single digit
+  
+  squad_v2:
+    enabled: true
+    split: "validation[:5%]"  # SQuAD uses validation split
+    batch_size: 8
+    max_new_tokens: 64  # Answer spans are typically short
+  
+  arc_easy:
+    enabled: true
+    split: "test[:5%]"
+    batch_size: 16
+    max_new_tokens: 10  # Just need letter choice
+
+# Output configuration
+output_path: "results/{model_name}/{timestamp}.json"  # Supports {model_name} and {timestamp} placeholders
+include_predictions: false  # Set to true to save all predictions/references (large files)
