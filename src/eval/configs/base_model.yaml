@@ -10,12 +10,12 @@ temperature: 0.7
 datasets:
   gsm8k:
     enabled: true
-    split: "test[:60%]"
+    split: "test[:]"
     max_new_tokens: 256
   
   snli:
     enabled: true
-    split: "test[:60%]"
+    split: "test[:]"
     max_new_tokens: 10
   
   # squad_v2:
@@ -25,12 +25,12 @@ datasets:
   
   boolq:
     enabled: true
-    split: "test[:60%]"
+    split: "validation[:]"
     max_new_tokens: 10
 
   arc_easy:
     enabled: true
-    split: "test[:60%]"
+    split: "test[:]"
     max_new_tokens: 10
 
 output_path: "results/{model_name}/{timestamp}.json"
