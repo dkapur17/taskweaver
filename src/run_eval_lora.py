@@ -17,7 +17,8 @@ from eval.datasets import (
     create_gsm8k_task,
     create_snli_task,
     create_squad_task,
-    create_arc_easy_task
+    create_arc_easy_task,
+    create_boolq_task
 )
 
 
@@ -25,7 +26,8 @@ DATASET_LOADERS = {
     'gsm8k': create_gsm8k_task,
     'snli': create_snli_task,
     'squad_v2': create_squad_task,
-    'arc_easy': create_arc_easy_task
+    'arc_easy': create_arc_easy_task,
+    'boolq': create_boolq_task
 }
 
 
