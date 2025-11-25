@@ -1,8 +1,8 @@
 # LoRA model evaluation config
-model_name: "lora-model"
-is_chat_model: false
-base_model_name: "google/gemma-3-270m"
-lora_adapter_path: "sweelol/lora-gemma3-270m-dolly"
+model_name: "Qwen-Qwen3-0.6B-lora-finetuned"
+is_chat_model: true
+base_model_name: "Qwen/Qwen3-0.6B"
+lora_adapter_path: /home/rajmahes/taskweaver/src/lora/lora_weights/Qwen-Qwen3-0.6B-lora-finetuned-openai-gsm8k
 
 batch_size: 8
 max_new_tokens: 128
@@ -11,21 +11,21 @@ datasets:
   gsm8k:
     enabled: true
     split: "test[:]"
-    max_new_tokens: 256
+    max_new_tokens: 1024
+
+  # boolq:
+  #   enabled: true
+  #   split: "validation[:]"
+  #   max_new_tokens: 10
   
   # snli:
   #   enabled: true
-  #   split: "test[:5%]"
+  #   split: "test[:]"
   #   max_new_tokens: 10
-  
-  # squad_v2:
-  #   enabled: true
-  #   split: "validation[:5%]"
-  #   max_new_tokens: 64
   
   # arc_easy:
   #   enabled: true
-  #   split: "test[:5%]"
+  #   split: "test"
   #   max_new_tokens: 10
 
 output_path: "results/{model_name}/{timestamp}.json"

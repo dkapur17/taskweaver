@@ -88,7 +88,7 @@ def login():
     # Login to Hugging Face to access gated models
     # Get your token from: https://huggingface.co/settings/tokens
     # Ensure your token has 'Read' permissions (or 'Write' if you plan to push models)
-    hf_token = "hf_"  # Replace with your actual token
+    hf_token = "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"  # Replace with your actual token
     login(token=hf_token)
 
 def main():

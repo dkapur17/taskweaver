@@ -1,0 +1,24 @@
+{
+  "summary": {
+    "num_tasks": 1,
+    "total_samples": 9824,
+    "average_accuracy": 0.32369706840390877,
+    "task_accuracies": {
+      "snli": 0.32369706840390877
+    },
+    "timestamp": "2025-11-24T21:42:39.076528"
+  },
+  "results": {
+    "snli": {
+      "eval_type": "MULTIPLE_CHOICE",
+      "metrics": {
+        "accuracy": 0.32369706840390877,
+        "answered_rate": 0.9684446254071661,
+        "correct": 3180,
+        "answered": 9514,
+        "total": 9824
+      },
+      "num_samples": 9824
+    }
+  }
+}
