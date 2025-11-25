@@ -1,0 +1,24 @@
+{
+  "summary": {
+    "num_tasks": 1,
+    "total_samples": 2376,
+    "average_accuracy": 0.7655723905723906,
+    "task_accuracies": {
+      "arc_easy": 0.7655723905723906
+    },
+    "timestamp": "2025-11-24T22:12:01.726550"
+  },
+  "results": {
+    "arc_easy": {
+      "eval_type": "MULTIPLE_CHOICE",
+      "metrics": {
+        "accuracy": 0.7655723905723906,
+        "answered_rate": 1.0,
+        "correct": 1819,
+        "answered": 2376,
+        "total": 2376
+      },
+      "num_samples": 2376
+    }
+  }
+}

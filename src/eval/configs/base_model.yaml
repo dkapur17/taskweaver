@@ -1,6 +1,6 @@
 # Base model (non-chat) evaluation config
 # model_name: "Gensyn/Qwen2.5-0.5B-Instruct"
-model_name: "google/gemma-3-270m-it"
+model_name: "Qwen/Qwen3-0.6B"
 is_chat_model: true
 
 batch_size: 8
@@ -11,17 +11,12 @@ datasets:
   gsm8k:
     enabled: true
     split: "test[:]"
-    max_new_tokens: 256
+    max_new_tokens: 1024
   
   snli:
     enabled: true
     split: "test[:]"
     max_new_tokens: 10
-  
-  # squad_v2:
-  #   enabled: true
-  #   split: "validation[:60%]"
-  #   max_new_tokens: 64
   
   boolq:
     enabled: true

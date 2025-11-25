@@ -1,0 +1,24 @@
+{
+  "summary": {
+    "num_tasks": 1,
+    "total_samples": 3270,
+    "average_accuracy": 0.5397553516819572,
+    "task_accuracies": {
+      "boolq": 0.5397553516819572
+    },
+    "timestamp": "2025-11-24T22:57:34.579440"
+  },
+  "results": {
+    "boolq": {
+      "eval_type": "BOOLEAN",
+      "metrics": {
+        "accuracy": 0.5397553516819572,
+        "answered_rate": 0.9831804281345565,
+        "correct": 1765,
+        "answered": 3215,
+        "total": 3270
+      },
+      "num_samples": 3270
+    }
+  }
+}
