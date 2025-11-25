@@ -178,7 +178,7 @@ class NumericConfig(EvaluationConfig):
         numbers = re.findall(r'-?\d+(?:,\d{3})*(?:\.\d+)?', pred)
         if numbers:
             if self.extract_last:
-                print("Matched 2= ", numbers[-1], "\n")
+                # print("Matched 2= ", numbers[-1], "\n")
                 return float(numbers[-1].replace(',', ''))
             else:
                 return float(numbers[0].replace(',', ''))
