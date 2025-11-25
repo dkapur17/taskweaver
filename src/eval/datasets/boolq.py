@@ -1,6 +1,6 @@
 from datasets import load_dataset
 from ..task import Task
-from ..eval_configs import MultipleChoiceConfig
+from ..eval_configs import BooleanConfig
 
 
 def create_boolq_task(split: str = 'validation[:5%]', is_chat_task: bool = True) -> Task:
@@ -32,7 +32,7 @@ def create_boolq_task(split: str = 'validation[:5%]', is_chat_task: bool = True)
     dataset = dataset.map(process_boolq)
 
     # Configure as binary classification (Yes/No)
-    eval_config = MultipleChoiceConfig(choices=['Yes', 'No'])
+    eval_config = BooleanConfig()
 
     user_template = """Passage: {passage}\nQuestion: {question}\nAnswer with 'Yes' or 'No'."""
 
