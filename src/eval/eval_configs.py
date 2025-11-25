@@ -168,15 +168,17 @@ class NumericConfig(EvaluationConfig):
             r'=\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)'
         ]
         
-        for pattern in patterns:
-            match = re.search(pattern, pred, re.IGNORECASE)
-            if match:
-                return float(match.group(1).replace(',', ''))
+        # for pattern in patterns:
+        #     match = re.search(pattern, pred, re.IGNORECASE)
+        #     if match:
+        #         print("Matched 1= ", match.group(1), "\n")
+        #         return float(match.group(1).replace(',', ''))
         
         # Fallback: extract all numbers and take last one
         numbers = re.findall(r'-?\d+(?:,\d{3})*(?:\.\d+)?', pred)
         if numbers:
             if self.extract_last:
+                print("Matched 2= ", numbers[-1], "\n")
                 return float(numbers[-1].replace(',', ''))
             else:
                 return float(numbers[0].replace(',', ''))
