@@ -3,7 +3,7 @@ from datasets import load_dataset, Dataset
 from peft import LoraConfig, get_peft_model
 from trl import SFTTrainer
 import os
-from dataset_configs import DatasetConfig
+from dsconf.dataset_configs import DatasetConfig
 
 from typing import Optional, Any, Dict, List, Tuple, Type
 
@@ -32,7 +32,7 @@ class LoraFinetuner:
 
         self.model, self.tokenizer = self._get_pretrained(model_path, device_map, lora_config)
         self.train_dataset, self.test_dataset = self._get_datasets(dataset_config, self.tokenizer.chat_template is not None, dataset_train_split, dataset_test_split)
-        self.output_dir = os.path.join(output_dir, f"{model_path.replace('/', '_')}_lora_{dataset_config.id().replace('/', '_').replace('.', '_')}")
+        self.output_dir = os.path.join(output_dir, model_path.replace('/', '_'), dataset_config.id().replace('/', '_').replace('.', '_'))
 
 
     def _get_pretrained(

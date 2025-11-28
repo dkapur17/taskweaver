@@ -1,8 +1,8 @@
 from jsonargparse import ArgumentParser, Namespace
 from dataclasses import dataclass, field
 
-from dataset_configs import DatasetConfig
-from lora_finetuner import LoraFinetuner
+from dsconf import DatasetConfig
+from lora import LoraFinetuner
 
 from typing import List, Type, Optional
 
@@ -22,7 +22,7 @@ class TrainConfig:
     learning_rate: float = 5e-5
     bf16: bool = False
     logging_steps: int = 10
-    save_total_limit: int = 0
+    save_total_limit: int = 1
     save_steps: int = 100
 
 
@@ -38,7 +38,7 @@ def parse_args() -> Namespace:
     parser.add_argument('--datasets', type=str, nargs='+', default=['all'], help='Datasets to finetune on (use "all" for all registered datasets)')
     parser.add_argument('--ignore_datasets', type=str, nargs='+', default=[], help='Datasets to ignore when using "all"')
     parser.add_argument('--device_map', type=str, default='auto', help='Device map for model loading')
-    parser.add_argument('--output_dir', type=str, default='lora_models', help='Base output directory for trained models')
+    parser.add_argument('--output_dir', type=str, default='_models/lora', help='Base output directory for trained models')
     parser.add_class_arguments(LoraConfig, 'lora', help='LoRA configuration parameters')
     parser.add_class_arguments(TrainConfig, 'train', help='Training configuration parameters')
     parser.add_class_arguments(DatasetSplitConfig, 'dataset', help='Dataset split configuration')

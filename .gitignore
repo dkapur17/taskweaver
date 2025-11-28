@@ -1,3 +1,6 @@
 .vscode/
 .env
 __pycache__
+src/_models/*/*
+src/_results/*/*
+src/wandb
