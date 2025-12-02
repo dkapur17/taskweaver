@@ -7,6 +7,7 @@ from dataclasses import dataclass
 class EvaluationResult:
     eval_type: str
     metrics: Optional[Dict[str, Union[int, float]]]
+    inputs: List[Any]       # Input prompts or messages
     predictions: List[str]  # Raw predictions
     references: List[str]   # Raw references
     parsed_predictions: Optional[List[Any]]  # Parsed predictions
@@ -39,11 +40,12 @@ class EvaluationConfig(ABC):
         """Compute metrics given parsed predictions and references"""
         pass
     
-    def __call__(self, predictions: List[str], references: List[str]) -> EvaluationResult:
+    def __call__(self, inputs: List[Any], predictions: List[str], references: List[str]) -> EvaluationResult:
         """
         Main evaluation method
         
         Args:
+            inputs: List of input prompts or messages
             predictions: List of raw prediction strings
             references: List of raw reference strings
             
@@ -63,6 +65,7 @@ class EvaluationConfig(ABC):
         return EvaluationResult(
             eval_type=eval_type,
             metrics=metrics,
+            inputs=inputs,
             predictions=predictions,
             references=references,
             parsed_predictions=parsed_predictions,

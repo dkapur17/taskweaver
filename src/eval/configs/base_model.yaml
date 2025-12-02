@@ -29,4 +29,3 @@ datasets:
     max_new_tokens: 10
 
 output_path: "results/{model_name}/{timestamp}.json"
-include_predictions: false

@@ -10,11 +10,12 @@ class Task:
             self,
             task_name: str,
             dataset: Dataset,
-            user_template: str,
-            assistant_template: str,
+            user_template: Optional[str] = None,
+            assistant_template: Optional[str] = None,
             system_prompt: Optional[str] = None,
             eval_config: Optional[EvaluationConfig] = None,
-            is_chat_task: bool = True
+            is_chat_task: bool = True,
+            skip_formatting: bool = False
     ):
 
         self.task_name = task_name  
@@ -23,9 +24,11 @@ class Task:
         self.system_prompt = system_prompt
         self.eval_config = eval_config
         self.is_chat_task = is_chat_task
+        self.skip_formatting = skip_formatting
 
         self.dataset = dataset
-        self._prepare_dataset()
+        if not skip_formatting:
+            self._prepare_dataset()
 
     def _prepare_dataset(self) -> None:
 
@@ -68,12 +71,13 @@ class Task:
         
         self.dataset = self.dataset.map(build_messages, batched=True, remove_columns=self.dataset.column_names)
 
-    def _get_preds_and_refs(self, model, tokenizer, batch_size:int=64, max_new_tokens:int=32768, temperature:float=1.0, progress:bool=False) -> Tuple[List[str], List[str]]:
+    def _get_preds_and_refs(self, model, tokenizer, batch_size:int=64, max_new_tokens:int=32768, temperature:float=1.0, progress:bool=False) -> Tuple[List, List[str], List[str]]:
         if progress:
             pbar = tqdm(self.dataset.iter(batch_size), total=self.dataset.num_rows//batch_size + 1)
         else:
             pbar = self.dataset.iter(batch_size)
 
+        inputs = []
         refs = []
         preds = []
         for batch in pbar:
@@ -82,7 +86,11 @@ class Task:
                                                             tokenize=False, 
                                                             add_generation_prompt=True, 
                                                             enable_thinking=False)
-                y = [row[0]['content'] for row in batch['y']]
+                # Handle both formatted (skip_formatting=True) and unformatted data
+                if self.skip_formatting:
+                    y = batch['y']
+                else:
+                    y = [row[0]['content'] for row in batch['y']]
             else:
                 model_input_texts = batch['X']
                 y = batch['y']
@@ -100,6 +108,7 @@ class Task:
                 y_pred = tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
                 preds_batch.append(y_pred)
 
+            inputs.extend(batch['X'])
             refs.extend(y)
             preds.extend(preds_batch)
 
@@ -107,18 +116,19 @@ class Task:
             # print("\nReferences: ", refs)
             # print("\nPredictions: ", preds)
 
-        return preds, refs
+        return inputs, preds, refs
 
     def evaluate(self, model, tokenizer, batch_size:int=64, max_new_tokens:int=32768, temperature:float=1.0, progress:bool=False) -> EvaluationResult:
         
-        preds, refs = self._get_preds_and_refs(model, tokenizer, batch_size, max_new_tokens, temperature, progress)
+        inputs, preds, refs = self._get_preds_and_refs(model, tokenizer, batch_size, max_new_tokens, temperature, progress)
 
         if self.eval_config:
-            return self.eval_config(preds, refs)
+            return self.eval_config(inputs, preds, refs)
         else:
             return EvaluationResult(
                 eval_type='NONE',
                 metrics=None,
+                inputs=inputs,
                 predictions=preds,
                 references=refs,
                 parsed_predictions=None,

@@ -31,7 +31,8 @@ class LoraFinetuner:
         )
 
         self.model, self.tokenizer = self._get_pretrained(model_path, device_map, lora_config)
-        self.train_dataset, self.test_dataset = self._get_datasets(dataset_config, self.tokenizer.chat_template is not None, dataset_train_split, dataset_test_split)
+        self.is_chat = self.tokenizer.chat_template is not None
+        self.train_dataset, self.test_dataset = self._get_datasets(dataset_config, self.is_chat, dataset_train_split, dataset_test_split)
         self.output_dir = os.path.join(output_dir, model_path.replace('/', '_'), dataset_config.id().replace('/', '_').replace('.', '_'))
 
 
@@ -93,7 +94,8 @@ class LoraFinetuner:
             train_dataset=self.train_dataset,
             eval_dataset=self.test_dataset,
             processing_class=self.tokenizer,
-            args=training_args
+            args=training_args,
+            dataset_text_field='text' if not self.is_chat else None
         )
 
         trainer.train()

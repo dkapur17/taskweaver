@@ -13,21 +13,15 @@ from typing import Dict, Any, Tuple
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from eval import Evaluator
-from eval.datasets import (
-    create_gsm8k_task,
-    create_snli_task,
-    create_squad_task,
-    create_arc_easy_task,
-    create_boolq_task
-)
+from dsconf.dataset_configs import DatasetConfig
 
 
-DATASET_LOADERS = {
-    'gsm8k': create_gsm8k_task,
-    'snli': create_snli_task,
-    'squad_v2': create_squad_task,
-    'arc_easy': create_arc_easy_task,
-    'boolq': create_boolq_task
+# Mapping of friendly dataset names to (dataset_path, dataset_name) tuples
+DATASET_REGISTRY = {
+    'gsm8k': ('openai/gsm8k', 'main'),
+    'arc_easy': ('allenai/ai2_arc', 'ARC-Easy'),
+    'boolq': ('google/boolq', None),
+    'snli': ('stanfordnlp/snli', None),
 }
 
 
@@ -111,13 +105,21 @@ def main():
     task_specific_kwargs = {}
     
     print("\nLoading datasets:")
-    for dataset_name, dataset_config in config['datasets'].items():
+    for dataset_key, dataset_config in config['datasets'].items():
         if not dataset_config.get('enabled', True):
-            print(f"  Skipping {dataset_name} (disabled)")
+            print(f"  Skipping {dataset_key} (disabled)")
             continue
         
-        if dataset_name not in DATASET_LOADERS:
-            print(f"  Warning: Unknown dataset {dataset_name}, skipping")
+        # Get dataset path and name from registry or config
+        if 'dataset_path' in dataset_config:
+            # Explicit paths provided (backward compatibility)
+            dataset_path = dataset_config['dataset_path']
+            dataset_name = dataset_config.get('dataset_name', None)
+        elif dataset_key in DATASET_REGISTRY:
+            # Use friendly name lookup
+            dataset_path, dataset_name = DATASET_REGISTRY[dataset_key]
+        else:
+            print(f"  Warning: Unknown dataset '{dataset_key}' and no dataset_path provided, skipping")
             continue
         
         split = dataset_config.get('split', 'test[:5%]')
@@ -125,17 +127,23 @@ def main():
         max_new_tokens = dataset_config.get('max_new_tokens', config.get('max_new_tokens', 128))
         temperature = dataset_config.get('temperature', config.get('temperature', 1.0))
         
-        print(f"  Loading {dataset_name} (split={split})")
+        print(f"  Loading {dataset_key} from {dataset_path} (split={split})")
         
-        loader_fn = DATASET_LOADERS[dataset_name]
-        task = loader_fn(split=split, is_chat_task=is_chat_model)
-        tasks.append(task)
-        
-        task_specific_kwargs[task.task_name] = {
-            'batch_size': batch_size,
-            'max_new_tokens': max_new_tokens,
-            'temperature': temperature
-        }
+        try:
+            # Get config class and create task
+            config_cls = DatasetConfig.from_dataset_path(dataset_path, dataset_name)
+            task = config_cls.create_task(split=split, is_chat=is_chat_model)
+            tasks.append(task)
+            
+            # Store task-specific kwargs
+            task_specific_kwargs[task.task_name] = {
+                'batch_size': batch_size,
+                'max_new_tokens': max_new_tokens,
+                'temperature': temperature
+            }
+        except Exception as e:
+            print(f"  Error loading {dataset_key}: {e}")
+            continue
     
     if not tasks:
         print("\nError: No datasets enabled in config")
@@ -155,8 +163,7 @@ def main():
     output_path = format_output_path(config['output_path'], model_name)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
-    include_predictions = config.get('include_predictions', False)
-    evaluator.save_results(output_path, include_predictions=include_predictions)
+    evaluator.save_results(output_path)
     
     print(f"\n{'='*70}")
     print(f"Evaluation complete!")

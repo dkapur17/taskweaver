@@ -195,13 +195,12 @@ class Evaluator:
             timestamp=datetime.now().isoformat()
         )
     
-    def save_results(self, filepath: Union[str, Path], include_predictions: bool = False) -> None:
+    def save_results(self, filepath: Union[str, Path]) -> None:
         """
-        Save evaluation results to JSON file
+        Save evaluation results with full I/O data to JSON file
         
         Args:
             filepath: Path to save results
-            include_predictions: Whether to include full predictions/references
         """
         if not self.results:
             raise ValueError("No results available. Run evaluate() first.")
@@ -212,21 +211,24 @@ class Evaluator:
         # Convert results to serializable format
         serializable_results = {}
         for task_name, result in self.results.items():
+            # Group each sample's data together
+            samples = []
+            for i in range(result.num_samples):
+                sample = {
+                    'input': result.inputs[i],
+                    'prediction': result.predictions[i],
+                    'reference': result.references[i],
+                    'parsed_prediction': str(result.parsed_predictions[i]) if result.parsed_predictions else None,
+                    'parsed_reference': str(result.parsed_references[i]) if result.parsed_references else None,
+                }
+                samples.append(sample)
+            
             result_dict = {
                 'eval_type': result.eval_type,
                 'metrics': result.metrics,
-                'num_samples': result.num_samples
+                'num_samples': result.num_samples,
+                'samples': samples
             }
-            
-            if include_predictions:
-                result_dict['predictions'] = result.predictions
-                result_dict['references'] = result.references
-                result_dict['parsed_predictions'] = [
-                    str(p) for p in result.parsed_predictions
-                ] if result.parsed_predictions else None
-                result_dict['parsed_references'] = [
-                    str(r) for r in result.parsed_references
-                ] if result.parsed_references else None
             
             serializable_results[task_name] = result_dict
         

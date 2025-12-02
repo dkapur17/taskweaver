@@ -16,15 +16,9 @@ datasets:
     split: "test[:10]"
     max_new_tokens: 10
   
-  squad_v2:
-    enabled: true
-    split: "validation[:10]"
-    max_new_tokens: 64
-  
   arc_easy:
     enabled: true
     split: "test[:10]"
     max_new_tokens: 10
 
 output_path: "results/{model_name}/quick_test_{timestamp}.json"
-include_predictions: true

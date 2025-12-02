@@ -13,6 +13,7 @@ class ChatOutput(TypedDict):
 class NonChatOutput(TypedDict):
     prompt: List[str]
     completion: List[str]
+    text: List[str]
 
 
 class DatasetConfig(ABC):
@@ -89,6 +90,61 @@ class DatasetConfig(ABC):
         if cls.dataset_name is not None:
             return f"{cls.dataset_path}.{cls.dataset_name}"
         return cls.dataset_path
+    
+    @classmethod
+    def to_eval_format(cls, processed_data: Dataset, is_chat: bool) -> Dict[str, List]:
+        """Convert processor output to eval format (X, y_true, y_gt)."""
+        if is_chat:
+            # Extract prompts (system + user) and completions (assistant)
+            X = []
+            y_true = []
+            for messages in processed_data['messages']:
+                # Combine system and user messages for prompt
+                prompt_msgs = [msg for msg in messages if msg['role'] in ['system', 'user']]
+                X.append(prompt_msgs)
+                # Extract assistant response
+                assistant_msg = next((msg for msg in messages if msg['role'] == 'assistant'), None)
+                y_true.append(assistant_msg['content'] if assistant_msg else '')
+            return {'X': X, 'y_true': y_true, 'y_gt': y_true}
+        else:
+            # Non-chat: prompts are X, completions are y
+            return {
+                'X': processed_data['prompt'],
+                'y_true': processed_data['completion'],
+                'y_gt': processed_data['completion']
+            }
+    
+    @classmethod
+    @abstractmethod
+    def get_eval_config(cls):
+        """Return the appropriate EvaluationConfig for this dataset."""
+        ...
+    
+    @classmethod
+    def create_task(cls, split: str, is_chat: bool):
+        """Create an evaluation Task for this dataset."""
+        from eval.task import Task
+        
+        # Load and process dataset
+        processed_data = cls.load_and_process(is_chat=is_chat, split=split)
+        eval_format = cls.to_eval_format(processed_data, is_chat=is_chat)
+        
+        # Create dataset with X, y columns
+        dataset = Dataset.from_dict({
+            'X': eval_format['X'],
+            'y': eval_format['y_true']
+        })
+        
+        # Get eval config
+        eval_config = cls.get_eval_config()
+        
+        return Task(
+            task_name=cls.id(),
+            dataset=dataset,
+            eval_config=eval_config,
+            is_chat_task=is_chat,
+            skip_formatting=True
+        )
 
 ############################################
 ### Per-Dataset Configs
@@ -122,7 +178,19 @@ class ArcEasyConfig(DatasetConfig):
             question = f"{question}\n" + "\n".join([f"{label}.{text}" for label, text in zip(choices['label'], choices['text'])])
             prompts.append(ArcEasyConfig._build_prompt(question))
 
-        return {'prompt': prompts, 'completion': batch['answerKey']}
+        completions = batch['answerKey']
+        texts = [p + c for p, c in zip(prompts, completions)]
+        return {'prompt': prompts, 'completion': completions, 'text': texts}
+    
+    @classmethod
+    def get_eval_config(cls):
+        from eval.eval_configs import MultipleChoiceConfig
+        # Get all possible choice labels from first batch
+        sample = load_dataset(cls.dataset_path, cls.dataset_name, split=f'{cls.test_split}[:10]')
+        all_labels = set()
+        for example in sample:
+            all_labels.update(example['choices']['label'])
+        return MultipleChoiceConfig(choices=sorted(all_labels))
     
 
 @DatasetConfig.register('openai/gsm8k', 'main')
@@ -144,7 +212,15 @@ class GSM8KConfig(DatasetConfig):
     
     @staticmethod
     def non_chat_processor(batch: Dataset) -> NonChatOutput:
-        return {'prompt': batch['question'], 'completion': batch['answer']}
+        prompts = [GSM8KConfig._build_prompt(q) for q in batch['question']]
+        completions = batch['answer']
+        texts = [p + c for p, c in zip(prompts, completions)]
+        return {'prompt': prompts, 'completion': completions, 'text': texts}
+    
+    @classmethod
+    def get_eval_config(cls):
+        from eval.eval_configs import NumericConfig
+        return NumericConfig(tolerance=1e-1)
     
     
 @DatasetConfig.register('google/boolq')
@@ -174,8 +250,14 @@ class BoolQConfig(DatasetConfig):
             prompts.append(prompt)
             completions.append(str(answer).lower())
 
-        return {'prompt': prompts, 'completion': completions}
+        texts = [p + c for p, c in zip(prompts, completions)]
+        return {'prompt': prompts, 'completion': completions, 'text': texts}
     
+    @classmethod
+    def get_eval_config(cls):
+        from eval.eval_configs import BooleanConfig
+        return BooleanConfig()
+
 
 @DatasetConfig.register('stanfordnlp/snli')
 class SNLIConfig(DatasetConfig):
@@ -212,4 +294,10 @@ class SNLIConfig(DatasetConfig):
             prompts.append(prompt)
             completions.append(SNLIConfig.label_map[label])
 
-        return {'prompt': prompts, 'completion': completions}
+        texts = [p + c for p, c in zip(prompts, completions)]
+        return {'prompt': prompts, 'completion': completions, 'text': texts}
+    
+    @classmethod
+    def get_eval_config(cls):
+        from eval.eval_configs import ExactMatchConfig
+        return ExactMatchConfig(case_sensitive=False)
