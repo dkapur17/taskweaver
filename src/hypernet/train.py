@@ -14,10 +14,10 @@ import torch
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
-    Trainer,
     TrainingArguments,
     TrainerCallback
 )
+from trl import SFTTrainer
 from torch.utils.tensorboard import SummaryWriter
 
 from hypernetwork import TaskWeaver
@@ -375,12 +375,13 @@ def main():
         train_dataset = concatenate_datasets(train_datasets)
         print(f"Total training examples: {len(train_dataset)}")
         
-        trainer = Trainer(
+        trainer = SFTTrainer(
             model=hypernet,
             args=training_args,
             train_dataset=train_dataset,
             data_collator=data_collator,
-            callbacks=[tensorboard_callback]
+            callbacks=[tensorboard_callback],
+            processing_class=tokenizer
         )
         
         print("Starting training...")
@@ -412,12 +413,13 @@ def main():
                 warmup_ratio=0.1
             )
             
-            trainer = Trainer(
+            trainer = SFTTrainer(
                 model=hypernet,
                 args=dataset_training_args,
                 train_dataset=train_dataset,
                 data_collator=data_collator,
-                callbacks=[TensorBoardCallback(log_dir=f"{args.tensorboard_dir}_dataset_{idx}")]
+                callbacks=[TensorBoardCallback(log_dir=f"{args.tensorboard_dir}_dataset_{idx}")],
+                processing_class=tokenizer
             )
             
             trainer.train()

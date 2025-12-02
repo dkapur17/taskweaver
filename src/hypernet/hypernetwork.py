@@ -107,6 +107,11 @@ class TaskWeaver(nn.Module):
         self._freeze_lm()
         self._init_weights()
 
+    @property
+    def config(self):
+        """Expose the underlying language model's config for compatibility with Trainer classes."""
+        return self.lm.config
+
     def _freeze_lm(self) -> None:
         for param in self.lm.parameters():
             param.requires_grad = False
@@ -262,14 +267,14 @@ class TaskWeaver(nn.Module):
 
         for layer_idx in range(self.lm_num_layers):
             layer_dict = {}
-            layer_emb = self.layer_embedding.weight[layer_idx:layer_idx + 1]
+            layer_emb = self.layer_embedding.weight[layer_idx:layer_idx + 1].to(semantic_embedding.device)
 
             for module_idx, module_name in enumerate(self.lora_target_layers):
                 module_dict = {}
-                module_emb = self.module_embedding.weight[module_idx:module_idx + 1]
+                module_emb = self.module_embedding.weight[module_idx:module_idx + 1].to(semantic_embedding.device)
 
                 for matrix_idx, matrix_name in enumerate(['A', 'B']):
-                    matrix_emb = self.matrix_embedding.weight[matrix_idx:matrix_idx + 1]
+                    matrix_emb = self.matrix_embedding.weight[matrix_idx:matrix_idx + 1].to(semantic_embedding.device)
 
                     # Combine embeddings
                     combined_emb = semantic_embedding + layer_emb + module_emb + matrix_emb
@@ -321,7 +326,8 @@ class TaskWeaver(nn.Module):
         attention_mask: torch.Tensor,
         labels: Optional[torch.Tensor] = None,
         prompt_lengths: Optional[torch.Tensor] = None,
-        skip_hypernet: bool = False
+        skip_hypernet: bool = False,
+        **kwargs
     ):
         """
         Forward pass through TaskWeaver.
