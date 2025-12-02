@@ -6,17 +6,17 @@ batch_size: 8
 max_new_tokens: 128
 
 datasets:
-  gsm8k:
+  openai/gsm8k.main:
     enabled: true
     split: "test[:10]"
     max_new_tokens: 256
   
-  snli:
+  stanfordnlp/snli:
     enabled: true
     split: "test[:10]"
     max_new_tokens: 10
   
-  arc_easy:
+  allenai/ai2_arc.ARC-Easy:
     enabled: true
     split: "test[:10]"
     max_new_tokens: 10

@@ -246,20 +246,26 @@ def run_model_evaluation(config_path: str) -> None:
             print(f"  Skipping {dataset_key} (disabled)")
             continue
         
-        # Get dataset path and name from config
-        dataset_path = dataset_config.get('dataset_path')
-        dataset_name = dataset_config.get('dataset_name', None)
+        # Parse dataset_key to get path and name
+        # Format: "path" or "path.name"
+        if '.' in dataset_key:
+            dataset_path, dataset_name = dataset_key.rsplit('.', 1)
+        else:
+            dataset_path = dataset_key
+            dataset_name = None
         
-        if not dataset_path:
-            print(f"  Warning: Missing dataset_path for {dataset_key}, skipping")
-            continue
+        # Override with explicit values from config if provided
+        dataset_path = dataset_config.get('dataset_path', dataset_path)
+        dataset_name = dataset_config.get('dataset_name', dataset_name)
         
         split = dataset_config.get('split', 'test[:5%]')
         batch_size = dataset_config.get('batch_size', config.get('batch_size', 8))
         max_new_tokens = dataset_config.get('max_new_tokens', config.get('max_new_tokens', 128))
         temperature = dataset_config.get('temperature', config.get('temperature', 1.0))
         
-        print(f"  Loading {dataset_key} from {dataset_path} (split={split})")
+        print(f"  Loading {dataset_key} from {dataset_path}" + 
+              (f"/{dataset_name}" if dataset_name else "") + 
+              f" (split={split})")
         
         try:
             # Get config class and create task
@@ -273,6 +279,10 @@ def run_model_evaluation(config_path: str) -> None:
                 'max_new_tokens': max_new_tokens,
                 'temperature': temperature
             }
+        except ValueError as e:
+            print(f"  Error: {e}")
+            print(f"  Available datasets: {DatasetConfig.list_available()}")
+            continue
         except Exception as e:
             print(f"  Error loading {dataset_key}: {e}")
             continue

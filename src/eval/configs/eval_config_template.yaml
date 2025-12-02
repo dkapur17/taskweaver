@@ -12,25 +12,25 @@ max_new_tokens: 128  # Default max tokens to generate
 # Dataset configurations
 # Set enabled: false to skip a dataset
 datasets:
-  gsm8k:
+  openai/gsm8k.main:
     enabled: true
     split: "test[:5%]"  # Use percentage or absolute count, e.g., "test[:100]"
     batch_size: 8  # Override global batch_size if needed
     max_new_tokens: 256  # Math problems may need more tokens
   
-  snli:
+  stanfordnlp/snli:
     enabled: true
     split: "test[:5%]"
     batch_size: 16  # Classification can use larger batches
     max_new_tokens: 10  # Only need single digit
   
-  squad_v2:
+  google/boolq:
     enabled: true
-    split: "validation[:5%]"  # SQuAD uses validation split
-    batch_size: 8
-    max_new_tokens: 64  # Answer spans are typically short
+    split: "validation[:5%]"
+    batch_size: 16
+    max_new_tokens: 10  # Classification task
   
-  arc_easy:
+  allenai/ai2_arc.ARC-Easy:
     enabled: true
     split: "test[:5%]"
     batch_size: 16
