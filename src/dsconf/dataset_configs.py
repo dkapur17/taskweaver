@@ -301,3 +301,114 @@ class SNLIConfig(DatasetConfig):
     def get_eval_config(cls):
         from eval.eval_configs import ExactMatchConfig
         return ExactMatchConfig(case_sensitive=False)
+
+
+@DatasetConfig.register('winogrande', 'winogrande_xl')
+class WinograndeConfig(DatasetConfig):
+
+    system_message = "Fill in the blank with the correct option. Respond only with 1 or 2"
+    train_split = 'train'
+    test_split = 'validation'
+
+    @staticmethod
+    def chat_processor(batch: Dataset) -> ChatOutput:
+        chats = []
+
+        for sentence, option1, option2, answer in zip(batch['sentence'], batch['option1'], batch['option2'], batch['answer']):
+            question = f"{sentence}\n1. {option1}\n2. {option2}"
+            chats.append(WinograndeConfig._build_chat(question, answer))
+
+        return {'messages': chats}
+    
+    @staticmethod
+    def non_chat_processor(batch: Dataset) -> NonChatOutput:
+        prompts = []
+
+        for sentence, option1, option2 in zip(batch['sentence'], batch['option1'], batch['option2']):
+            question = f"{sentence}\n1. {option1}\n2. {option2}"
+            prompts.append(WinograndeConfig._build_prompt(question))
+
+        completions = batch['answer']
+        texts = [p + c for p, c in zip(prompts, completions)]
+        return {'prompt': prompts, 'completion': completions, 'text': texts}
+    
+    @classmethod
+    def get_eval_config(cls):
+        from eval.eval_configs import MultipleChoiceConfig
+        return MultipleChoiceConfig(choices=['1', '2'])
+
+
+@DatasetConfig.register('allenai/openbookqa', 'main')
+class OpenBookQAConfig(DatasetConfig):
+
+    system_message = "Choose the most reasonable answer for the question from the given options. Respond only with A, B, C or D"
+    train_split = 'train'
+    test_split = 'test'
+
+    @staticmethod
+    def chat_processor(batch: Dataset) -> ChatOutput:
+        chats = []
+
+        for question_stem, choices, answer_key in zip(batch['question_stem'], batch['choices'], batch['answerKey']):
+            question = f"{question_stem}\n" + "\n".join([f"{label}. {text}" for label, text in zip(choices['label'], choices['text'])])
+            chats.append(OpenBookQAConfig._build_chat(question, answer_key))
+
+        return {'messages': chats}
+    
+    @staticmethod
+    def non_chat_processor(batch: Dataset) -> NonChatOutput:
+        prompts = []
+
+        for question_stem, choices in zip(batch['question_stem'], batch['choices']):
+            question = f"{question_stem}\n" + "\n".join([f"{label}. {text}" for label, text in zip(choices['label'], choices['text'])])
+            prompts.append(OpenBookQAConfig._build_prompt(question))
+
+        completions = batch['answerKey']
+        texts = [p + c for p, c in zip(prompts, completions)]
+        return {'prompt': prompts, 'completion': completions, 'text': texts}
+    
+    @classmethod
+    def get_eval_config(cls):
+        from eval.eval_configs import MultipleChoiceConfig
+        sample = load_dataset(cls.dataset_path, cls.dataset_name, split=f'{cls.test_split}[:10]')
+        all_labels = set()
+        for example in sample:
+            all_labels.update(example['choices']['label'])
+        return MultipleChoiceConfig(choices=sorted(all_labels))
+
+
+@DatasetConfig.register('Rowan/hellaswag')
+class HellaSwagConfig(DatasetConfig):
+
+    system_message = "Choose the most reasonable continuation from the given options. Respond only with 0, 1, 2 or 3"
+    train_split = 'train'
+    test_split = 'validation'
+
+    @staticmethod
+    def chat_processor(batch: Dataset) -> ChatOutput:
+        chats = []
+
+        for ctx, activity_label, endings, label in zip(batch['ctx'], batch['activity_label'], batch['endings'], batch['label']):
+            context = f"{activity_label}: {ctx}" if activity_label else ctx
+            question = f"{context}\n" + "\n".join([f"{i}. {ending}" for i, ending in enumerate(endings)])
+            chats.append(HellaSwagConfig._build_chat(question, label))
+
+        return {'messages': chats}
+    
+    @staticmethod
+    def non_chat_processor(batch: Dataset) -> NonChatOutput:
+        prompts = []
+
+        for ctx, activity_label, endings in zip(batch['ctx'], batch['activity_label'], batch['endings']):
+            context = f"{activity_label}: {ctx}" if activity_label else ctx
+            question = f"{context}\n" + "\n".join([f"{i}. {ending}" for i, ending in enumerate(endings)])
+            prompts.append(HellaSwagConfig._build_prompt(question))
+
+        completions = batch['label']
+        texts = [p + c for p, c in zip(prompts, completions)]
+        return {'prompt': prompts, 'completion': completions, 'text': texts}
+    
+    @classmethod
+    def get_eval_config(cls):
+        from eval.eval_configs import MultipleChoiceConfig
+        return MultipleChoiceConfig(choices=['0', '1', '2', '3'])
