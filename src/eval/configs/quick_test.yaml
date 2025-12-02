@@ -1,5 +1,5 @@
 # Quick test config - runs small subset for fast testing
-model_name: "Qwen/Qwen3-0.6B"
+base_model_name: "Qwen/Qwen3-0.6B"
 is_chat_model: true
 
 batch_size: 8

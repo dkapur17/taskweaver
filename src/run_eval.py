@@ -20,16 +20,56 @@ from eval.eval_configs import EvaluationResult, NumericConfig
 from dsconf.dataset_configs import DatasetConfig
 
 
+def load_model_with_lora(base_model_name: str, lora_adapter_path: str):
+    """Load model with LoRA adapters merged."""
+    try:
+        from peft import PeftModel
+    except ImportError:
+        raise ImportError(
+            "LoRA evaluation requires the 'peft' library. "
+            "Install it with: pip install peft"
+        )
+    
+    print(f"Loading base model: {base_model_name}")
+    base_model = AutoModelForCausalLM.from_pretrained(
+        base_model_name,
+        device_map='auto',
+        trust_remote_code=True
+    )
+    
+    print(f"Loading LoRA adapter: {lora_adapter_path}")
+    model = PeftModel.from_pretrained(base_model, lora_adapter_path)
+    
+    print("Merging LoRA weights...")
+    model = model.merge_and_unload()
+    
+    tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+    
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = 'left'
+    
+    return model, tokenizer
+
+
 def load_config(config_path: str) -> Dict[str, Any]:
     """Load and validate YAML config."""
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
     
+    
     # Validate required fields
-    required_fields = ['model_name', 'is_chat_model', 'datasets', 'output_path']
+    required_fields = ['base_model_name', 'is_chat_model', 'datasets', 'output_path']
     for field in required_fields:
         if field not in config:
             raise ValueError(f"Missing required field in config: {field}")
+
+    # Check if this is a LoRA config
+    is_lora = 'lora_adapter_path' in config
+
+    # Validate LoRA-specific fields
+    if is_lora and not config.get('lora_adapter_path'):
+        raise ValueError("LoRA configs require 'lora_adapter_path' field")
     
     return config
 
@@ -167,17 +207,33 @@ def run_model_evaluation(config_path: str) -> None:
     print(f"Loading config from: {config_path}")
     config = load_config(config_path)
     
-    # Load model and tokenizer
-    model_name = config['model_name']
-    print(f"\nLoading model: {model_name}")
-    model = AutoModelForCausalLM.from_pretrained(model_name, device_map='auto')
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    # Detect LoRA config and load model accordingly
+    is_lora = 'lora_adapter_path' in config
     
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-    
-    # Set padding side for batched generation
-    tokenizer.padding_side = 'left'
+    if is_lora:
+        print(f"\nDetected LoRA configuration")
+        print("=" * 70)
+        model, tokenizer = load_model_with_lora(
+            config['base_model_name'],
+            config['lora_adapter_path']
+        )
+        print("=" * 70)
+    else:
+        # Standard model loading
+        base_model_name = config['base_model_name']
+        print(f"\nLoading model: {base_model_name}")
+        model = AutoModelForCausalLM.from_pretrained(
+            base_model_name,
+            device_map='auto',
+            trust_remote_code=True
+        )
+        tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+        
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        
+        # Set padding side for batched generation
+        tokenizer.padding_side = 'left'
     
     # Create tasks for enabled datasets
     is_chat_model = config['is_chat_model']
@@ -237,7 +293,9 @@ def run_model_evaluation(config_path: str) -> None:
     )
     
     # Save results
-    output_path = format_output_path(config['output_path'], model_name)
+    # Use model_name for display if provided, otherwise use base_model_name
+    display_name = config.get('model_name', config['base_model_name'])
+    output_path = format_output_path(config['output_path'], display_name)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
     evaluator.save_results(output_path)
@@ -250,18 +308,27 @@ def run_model_evaluation(config_path: str) -> None:
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Evaluate models or re-evaluate saved results',
+        description='Evaluate models (standard or LoRA) or re-evaluate saved results',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  Model evaluation:
+  Standard model evaluation:
     python run_eval.py configs/quick_test.yaml
     python run_eval.py configs/base_model.yaml
+  
+  LoRA model evaluation:
+    python run_eval.py configs/lora_model.yaml
+    (Requires 'peft' library: pip install peft)
   
   Re-evaluation from JSON:
     python run_eval.py --reevaluate results/model/results.json
     python run_eval.py --reevaluate results.json
     python run_eval.py --reevaluate results.json --output new.json --quiet
+
+Config file format:
+  Standard models require: base_model_name, is_chat_model, datasets, output_path
+  LoRA models also require: lora_adapter_path
+  Optional: model_name (for display/output naming)
         """
     )
     

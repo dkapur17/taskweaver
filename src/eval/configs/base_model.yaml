@@ -1,6 +1,6 @@
 # Base model (non-chat) evaluation config
-# model_name: "Gensyn/Qwen2.5-0.5B-Instruct"
-model_name: "Qwen/Qwen3-0.6B"
+# base_model_name: "Gensyn/Qwen2.5-0.5B-Instruct"
+base_model_name: "Qwen/Qwen3-0.6B"
 is_chat_model: true
 
 batch_size: 8

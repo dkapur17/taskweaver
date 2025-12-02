@@ -1,8 +1,8 @@
 # LoRA model evaluation config
-model_name: "Qwen-Qwen3-0.6B-lora-finetuned"
-is_chat_model: true
 base_model_name: "Qwen/Qwen3-0.6B"
 lora_adapter_path: /home/rajmahes/taskweaver/src/lora/lora_weights/Qwen-Qwen3-0.6B-lora-finetuned-openai-gsm8k
+model_name: "Qwen-Qwen3-0.6B-lora-finetuned"  # Optional: display name for outputs
+is_chat_model: true
 
 batch_size: 8
 max_new_tokens: 128
