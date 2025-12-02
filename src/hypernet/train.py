@@ -107,15 +107,18 @@ def parse_args():
 
     # Dataset arguments
     parser.add_argument(
-        '--dataset_config',
+        '--dataset_names',
         type=str,
-        default='configs/dataset_config.json',
-        help='Path to dataset configuration JSON file'
+        nargs='+',
+        default=None,
+        help='Dataset names to train on (e.g., openai/gsm8k allenai/ai2_arc). If not specified, uses all available datasets.'
     )
     parser.add_argument(
-        '--use_default_dataset',
-        action='store_true',
-        help='Use default GSM8K dataset configuration'
+        '--training_mode',
+        type=str,
+        choices=['mixed', 'sequential'],
+        default='mixed',
+        help='Training mode: "mixed" concatenates all datasets, "sequential" trains on each dataset separately'
     )
 
     # Training arguments
@@ -204,37 +207,67 @@ def load_model_and_tokenizer(model_name: str):
     return model, tokenizer
 
 
-def prepare_dataset(tokenizer, dataset_config_path: Optional[str] = None):
+def prepare_dataset(tokenizer, dataset_names: Optional[List[str]] = None):
     """
-    Prepare training dataset.
+    Prepare training dataset using dsconf DatasetConfig system.
 
     Args:
         tokenizer: Tokenizer instance
-        dataset_config_path: Path to dataset configuration file (optional)
+        dataset_names: List of dataset identifiers (e.g., ['openai/gsm8k', 'allenai/ai2_arc'])
+                      If None, uses all available datasets
 
     Returns:
-        Processed dataset
+        Processed dataset or list of datasets
     """
-    if dataset_config_path and os.path.exists(dataset_config_path):
-        import json
-        print(f"Loading dataset configuration from: {dataset_config_path}")
-        with open(dataset_config_path, 'r') as f:
-            dataset_configs = json.load(f)
+    from dsconf.dataset_configs import DatasetConfig
+    from datasets import concatenate_datasets
+    
+    # Get available datasets
+    available = DatasetConfig.list_available()
+    
+    # Filter by requested datasets if specified
+    if dataset_names:
+        configs_to_use = [(path, name) for path, name in available 
+                         if any(dn in (path if name is None else f"{path}/{name}") for dn in dataset_names)]
     else:
-        # Default configuration: GSM8K only
-        print("Using default dataset configuration (GSM8K)")
-        dataset_configs = [
-            {
-                'name': 'gsm8k',
-                'dataset_path': 'openai/gsm8k',
-                'dataset_config': 'main'
-            }
-        ]
-
-    dataset = create_dataset(tokenizer, dataset_configs)
-    print(f"Dataset created with {len(dataset)} examples")
-
-    return dataset
+        configs_to_use = available
+    
+    print(f"Preparing {len(configs_to_use)} datasets: {configs_to_use}")
+    
+    datasets = []
+    for dataset_path, dataset_name in configs_to_use:
+        config_cls = DatasetConfig.from_dataset_path(dataset_path, dataset_name)
+        ds = config_cls.load_and_process(is_chat=False, split=config_cls.train_split)
+        
+        # Tokenize the dataset
+        def tokenize_function(examples):
+            prompts = examples['prompt']
+            completions = examples['completion']
+            
+            results = {'input_ids': [], 'attention_mask': [], 'labels': [], 'prompt_length': []}
+            
+            for prompt, completion in zip(prompts, completions):
+                prompt_tokens = tokenizer(prompt, add_special_tokens=True)
+                completion_tokens = tokenizer(completion, add_special_tokens=False)
+                
+                input_ids = prompt_tokens['input_ids'] + completion_tokens['input_ids']
+                attention_mask = prompt_tokens['attention_mask'] + completion_tokens['attention_mask']
+                
+                prompt_length = len(prompt_tokens['input_ids'])
+                labels = [-100] * prompt_length + completion_tokens['input_ids']
+                
+                results['input_ids'].append(input_ids)
+                results['attention_mask'].append(attention_mask)
+                results['labels'].append(labels)
+                results['prompt_length'].append(prompt_length)
+            
+            return results
+        
+        tokenized_ds = ds.map(tokenize_function, batched=True, remove_columns=ds.column_names)
+        datasets.append(tokenized_ds)
+        print(f"Loaded {config_cls.id()}: {len(tokenized_ds)} examples")
+    
+    return datasets
 
 
 def main():
@@ -284,9 +317,8 @@ def main():
 
     hypernet.print_trainable_parameters()
 
-    # Prepare dataset
-    dataset_config = None if args.use_default_dataset else args.dataset_config
-    train_dataset = prepare_dataset(tokenizer, dataset_config)
+    # Prepare dataset(s)
+    train_datasets = prepare_dataset(tokenizer, args.dataset_names)
 
     # Create data collator
     data_collator = DataCollatorWithPromptLengths(
@@ -316,21 +348,14 @@ def main():
     # Create TensorBoard callback
     tensorboard_callback = TensorBoardCallback(log_dir=args.tensorboard_dir)
 
-    # Create trainer
-    trainer = Trainer(
-        model=hypernet,
-        args=training_args,
-        train_dataset=train_dataset,
-        data_collator=data_collator,
-        callbacks=[tensorboard_callback]
-    )
-
     # Print training info
     print("\n" + "="*50)
     print("Training Configuration:")
     print("="*50)
     print(f"Model: {args.model_name}")
     print(f"Device: {device}")
+    print(f"Training mode: {args.training_mode}")
+    print(f"Number of datasets: {len(train_datasets)}")
     print(f"Hidden dim: {args.hidden_dim}")
     print(f"LoRA rank: {args.lora_rank}")
     print(f"LoRA alpha: {args.lora_alpha}")
@@ -342,9 +367,61 @@ def main():
     print(f"TensorBoard dir: {args.tensorboard_dir}")
     print("="*50 + "\n")
 
-    # Train
-    print("Starting training...")
-    trainer.train()
+    # Train based on mode
+    if args.training_mode == 'mixed':
+        # Concatenate all datasets
+        from datasets import concatenate_datasets
+        print("Training in MIXED mode - concatenating all datasets...")
+        train_dataset = concatenate_datasets(train_datasets)
+        print(f"Total training examples: {len(train_dataset)}")
+        
+        trainer = Trainer(
+            model=hypernet,
+            args=training_args,
+            train_dataset=train_dataset,
+            data_collator=data_collator,
+            callbacks=[tensorboard_callback]
+        )
+        
+        print("Starting training...")
+        trainer.train()
+    else:
+        # Sequential training on each dataset
+        print("Training in SEQUENTIAL mode - training on each dataset separately...")
+        for idx, train_dataset in enumerate(train_datasets):
+            print(f"\n{'='*50}")
+            print(f"Training on dataset {idx+1}/{len(train_datasets)} ({len(train_dataset)} examples)")
+            print(f"{'='*50}\n")
+            
+            # Update output directory for this dataset
+            dataset_output_dir = f"{args.output_dir}_dataset_{idx}"
+            dataset_training_args = TrainingArguments(
+                output_dir=dataset_output_dir,
+                per_device_train_batch_size=args.batch_size,
+                gradient_accumulation_steps=args.gradient_accumulation_steps,
+                learning_rate=args.learning_rate,
+                num_train_epochs=args.num_epochs,
+                logging_steps=args.logging_steps,
+                save_steps=args.save_steps,
+                fp16=False,
+                remove_unused_columns=False,
+                dataloader_num_workers=4,
+                dataloader_pin_memory=False,
+                report_to=['tensorboard'],
+                logging_dir=f"{args.tensorboard_dir}_dataset_{idx}",
+                warmup_ratio=0.1
+            )
+            
+            trainer = Trainer(
+                model=hypernet,
+                args=dataset_training_args,
+                train_dataset=train_dataset,
+                data_collator=data_collator,
+                callbacks=[TensorBoardCallback(log_dir=f"{args.tensorboard_dir}_dataset_{idx}")]
+            )
+            
+            trainer.train()
+            print(f"Completed training on dataset {idx+1}/{len(train_datasets)}")
 
     # Save final model using TaskWeaver's save_pretrained
     print(f"\nSaving final model to {args.output_dir}")
