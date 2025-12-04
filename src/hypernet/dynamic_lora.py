@@ -106,10 +106,9 @@ class DynamicLoraLinear(nn.Linear):
             return F.linear(input, self.weight, self.bias)
 
         # Batch size sanity check
-        batch_size = input.size(0)
-        if self.A.size(0) != batch_size:
+        if self.A.size(0) != input.size(0):
             raise RuntimeError(
-                f"Batch size mismatch! Input batch_size={batch_size}, "
+                f"Batch size mismatch! Input batch_size={input.size(0)}, "
                 f"but LoRA A has batch_size={self.A.size(0)}. "
                 f"Old LoRA weights are being reused!"
             )

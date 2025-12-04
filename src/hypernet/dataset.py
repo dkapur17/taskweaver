@@ -142,6 +142,171 @@ class ARCProcessor(DatasetProcessor):
         return self._prepare_examples(prompts, completions)
 
 
+class BoolQProcessor(DatasetProcessor):
+    """Processor for BoolQ dataset."""
+
+    def process(self, examples: Dict) -> Dict:
+        """
+        Process BoolQ examples.
+
+        Args:
+            examples: Batch with 'passage', 'question', and 'answer' fields
+
+        Returns:
+            Processed examples
+        """
+        prompts = []
+        completions = []
+
+        for passage, question, answer in zip(
+            examples['passage'], examples['question'], examples['answer']
+        ):
+            prompt = (
+                "Instruction: Use the content in the passage to answer the question with either true or false only\n"
+                f"Passage: {passage}\nQuestion: {question}\nAnswer: "
+            )
+            completion = str(answer).lower()
+            prompts.append(prompt)
+            completions.append(completion)
+
+        return self._prepare_examples(prompts, completions)
+
+
+class SNLIProcessor(DatasetProcessor):
+    """Processor for SNLI dataset."""
+
+    LABEL_MAP = {
+        0: 'entailment',
+        1: 'neutral',
+        2: 'contradiction'
+    }
+
+    def process(self, examples: Dict) -> Dict:
+        """
+        Process SNLI examples.
+
+        Args:
+            examples: Batch with 'premise', 'hypothesis', and 'label' fields
+
+        Returns:
+            Processed examples
+        """
+        prompts = []
+        completions = []
+
+        for premise, hypothesis, label in zip(
+            examples['premise'], examples['hypothesis'], examples['label']
+        ):
+            # Skip unlabeled examples
+            if label == -1:
+                continue
+            prompt = (
+                "Instruction: Given a premise and a hypothesis, determine the relationship between them. "
+                "Respond with 'entailment' if the hypothesis follows from the premise, 'contradiction' if the hypothesis contradicts the premise, "
+                "or 'neutral' if the relationship is undetermined.\n"
+                f"Premise: {premise}\nHypothesis: {hypothesis}\nRelationship: "
+            )
+            completion = self.LABEL_MAP.get(label, '')
+            prompts.append(prompt)
+            completions.append(completion)
+
+        return self._prepare_examples(prompts, completions)
+
+
+class WinograndeProcessor(DatasetProcessor):
+    """Processor for Winogrande dataset."""
+
+    def process(self, examples: Dict) -> Dict:
+        """
+        Process Winogrande examples.
+
+        Args:
+            examples: Batch with 'sentence', 'option1', 'option2', 'answer' fields
+
+        Returns:
+            Processed examples
+        """
+        prompts = []
+        completions = []
+
+        for sentence, option1, option2, answer in zip(
+            examples['sentence'], examples['option1'], examples['option2'], examples['answer']
+        ):
+            question = f"{sentence}\n1. {option1}\n2. {option2}"
+            prompt = (
+                "Instruction: Fill in the blank with the correct option. Respond only with 1 or 2\n"
+                f"{question}\nAnswer: "
+            )
+            completion = str(answer)
+            prompts.append(prompt)
+            completions.append(completion)
+
+        return self._prepare_examples(prompts, completions)
+
+
+class OpenBookQAProcessor(DatasetProcessor):
+    """Processor for OpenBookQA dataset."""
+
+    def process(self, examples: Dict) -> Dict:
+        """
+        Process OpenBookQA examples.
+
+        Args:
+            examples: Batch with 'question_stem', 'choices', and 'answerKey' fields
+
+        Returns:
+            Processed examples
+        """
+        prompts = []
+        completions = []
+
+        for stem, choices, answer_key in zip(
+            examples['question_stem'], examples['choices'], examples['answerKey']
+        ):
+            choices_text = "\n".join([f"{label}. {text}" for label, text in zip(choices['label'], choices['text'])])
+            prompt = (
+                "Instruction: Choose the most reasonable answer for the question from the given options. Respond only with A, B, C or D\n"
+                f"{stem}\n{choices_text}\nAnswer: "
+            )
+            completion = answer_key
+            prompts.append(prompt)
+            completions.append(completion)
+
+        return self._prepare_examples(prompts, completions)
+
+
+class HellaSwagProcessor(DatasetProcessor):
+    """Processor for HellaSwag dataset."""
+
+    def process(self, examples: Dict) -> Dict:
+        """
+        Process HellaSwag examples.
+
+        Args:
+            examples: Batch with 'ctx', 'activity_label', 'endings', and 'label' fields
+
+        Returns:
+            Processed examples
+        """
+        prompts = []
+        completions = []
+
+        for ctx, activity_label, endings, label in zip(
+            examples['ctx'], examples.get('activity_label', [None]*len(examples['ctx'])), examples['endings'], examples['label']
+        ):
+            context = f"{activity_label}: {ctx}" if activity_label else ctx
+            options_text = "\n".join([f"{i}. {ending}" for i, ending in enumerate(endings)])
+            prompt = (
+                "Instruction: Choose the most reasonable continuation from the given options. Respond only with 0, 1, 2 or 3\n"
+                f"{context}\n{options_text}\nAnswer: "
+            )
+            completion = str(label)
+            prompts.append(prompt)
+            completions.append(completion)
+
+        return self._prepare_examples(prompts, completions)
+
+
 class MultiDatasetCreator:
     """
     Creator for combining multiple datasets into a single training dataset.
@@ -315,5 +480,10 @@ def create_dataset(
     creator.register_processor('gsm8k', GSM8KProcessor(tokenizer))
     creator.register_processor('arc-easy', ARCProcessor(tokenizer))
     creator.register_processor('arc-challenge', ARCProcessor(tokenizer))
+    creator.register_processor('boolq', BoolQProcessor(tokenizer))
+    creator.register_processor('snli', SNLIProcessor(tokenizer))
+    creator.register_processor('winogrande', WinograndeProcessor(tokenizer))
+    creator.register_processor('openbookqa', OpenBookQAProcessor(tokenizer))
+    creator.register_processor('hellaswag', HellaSwagProcessor(tokenizer))
 
     return creator.create_combined_dataset(dataset_configs)

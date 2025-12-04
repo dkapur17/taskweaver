@@ -17,7 +17,7 @@ class LoraFinetuner:
                  lora_rank: int = 2,
                  lora_alpha: int = 8,
                  lora_dropout: float = 0.05,
-                 target_modules: List[str] = ['q_proj', 'v_proj'],
+                 target_modules: List[str] = ['q_proj', 'v_proj', 'k_proj', 'o_proj'], 
                  device_map: str = 'auto',
                  output_dir: str = 'lora_models'):
         
