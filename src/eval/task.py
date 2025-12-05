@@ -100,7 +100,19 @@ class Task:
 
             model_inputs = tokenizer(model_input_texts, return_tensors='pt', padding=True).to(model.device)
             
-            model_outputs = model.generate(**model_inputs, max_new_tokens=max_new_tokens, temperature=temperature, do_sample=True)
+            # Check if model is TaskWeaver and needs prompt_lengths
+            is_taskweaver = hasattr(model, '_hypernet_forward')
+            if is_taskweaver:
+                prompt_lengths = model_inputs.attention_mask.sum(dim=1)
+                model_outputs = model.generate(
+                    **model_inputs,
+                    prompt_lengths=prompt_lengths,
+                    max_new_tokens=max_new_tokens,
+                    temperature=temperature,
+                    do_sample=True
+                )
+            else:
+                model_outputs = model.generate(**model_inputs, max_new_tokens=max_new_tokens, temperature=temperature, do_sample=True)
             
             preds_batch = []
             for i, output in enumerate(model_outputs):

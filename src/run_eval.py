@@ -52,6 +52,46 @@ def load_model_with_lora(base_model_name: str, lora_adapter_path: str):
     return model, tokenizer
 
 
+def load_taskweaver_hypernet(hypernet_path: str, device_map: str = 'auto'):
+    """Load TaskWeaver hypernetwork model."""
+    try:
+        import sys
+        import os
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'hypernet'))
+        from hypernetwork import TaskWeaver
+    except ImportError:
+        raise ImportError(
+            "TaskWeaver evaluation requires the hypernetwork module. "
+            "Make sure hypernet/hypernetwork.py is available."
+        )
+    
+    import torch
+    
+    print(f"Loading TaskWeaver hypernetwork: {hypernet_path}")
+    
+    # Determine device
+    if device_map == 'auto':
+        if torch.cuda.is_available():
+            device = 'cuda'
+        elif torch.backends.mps.is_available():
+            device = 'mps'
+        else:
+            device = 'cpu'
+    else:
+        device = device_map
+    
+    model = TaskWeaver.from_pretrained(hypernet_path, device=device)
+    model.eval()
+    
+    tokenizer = AutoTokenizer.from_pretrained(hypernet_path)
+    
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = 'left'
+    
+    return model, tokenizer
+
+
 def load_config(config_path: str) -> Dict[str, Any]:
     """Load and validate YAML config."""
     with open(config_path, 'r') as f:
@@ -64,12 +104,17 @@ def load_config(config_path: str) -> Dict[str, Any]:
         if field not in config:
             raise ValueError(f"Missing required field in config: {field}")
 
-    # Check if this is a LoRA config
+    # Check if this is a LoRA or Hypernet config
     is_lora = 'lora_adapter_path' in config
+    is_hypernet = 'hypernet_path' in config
 
     # Validate LoRA-specific fields
     if is_lora and not config.get('lora_adapter_path'):
         raise ValueError("LoRA configs require 'lora_adapter_path' field")
+    
+    # Validate Hypernet-specific fields
+    if is_hypernet and not config.get('hypernet_path'):
+        raise ValueError("Hypernet configs require 'hypernet_path' field")
     
     return config
 
@@ -207,10 +252,19 @@ def run_model_evaluation(config_path: str) -> None:
     print(f"Loading config from: {config_path}")
     config = load_config(config_path)
     
-    # Detect LoRA config and load model accordingly
+    # Detect model type and load accordingly
     is_lora = 'lora_adapter_path' in config
+    is_hypernet = 'hypernet_path' in config
     
-    if is_lora:
+    if is_hypernet:
+        print(f"\nDetected TaskWeaver Hypernetwork configuration")
+        print("=" * 70)
+        model, tokenizer = load_taskweaver_hypernet(
+            config['hypernet_path'],
+            device_map=config.get('device_map', 'auto')
+        )
+        print("=" * 70)
+    elif is_lora:
         print(f"\nDetected LoRA configuration")
         print("=" * 70)
         model, tokenizer = load_model_with_lora(

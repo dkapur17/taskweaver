@@ -1,0 +1,40 @@
+# TaskWeaver Hypernetwork Evaluation Config
+hypernet_path: ./taskweaver_output  # Path to trained TaskWeaver model
+is_chat_model: false  # Whether to use chat format
+device_map: auto  # Device mapping: auto, cuda, cpu, mps
+
+# Optional: Override display name for results
+model_name: TaskWeaver-Pythia70M
+
+# Datasets to evaluate
+datasets:
+  openai/gsm8k:
+    enabled: true
+    split: "test[:5%]"
+    batch_size: 8
+    max_new_tokens: 256
+    temperature: 1.0
+  
+  allenai/ai2_arc:
+    enabled: true
+    split: "test[:5%]"
+    batch_size: 16
+    max_new_tokens: 128
+    temperature: 1.0
+  
+  snli:
+    enabled: true
+    split: "test[:5%]"
+    batch_size: 16
+    max_new_tokens: 64
+    temperature: 1.0
+  
+  boolq:
+    enabled: true
+    split: "test[:5%]"
+    batch_size: 16
+    max_new_tokens: 32
+    temperature: 1.0
+
+# Output path
+output_path: "results/{model_name}/{timestamp}.json"
