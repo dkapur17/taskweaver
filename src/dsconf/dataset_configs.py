@@ -1,7 +1,7 @@
-from datasets import Dataset
+from datasets import Dataset, concatenate_datasets, interleave_datasets
 from abc import ABC, abstractmethod
 from datasets import load_dataset, Dataset
-from typing import List, Literal, TypedDict, Dict, Type, Optional, Tuple
+from typing import List, Literal, TypedDict, Dict, Type, Optional, Tuple, Union
 
 class Message(TypedDict):
     role: Literal['system', 'user', 'assistant']
@@ -412,3 +412,82 @@ class HellaSwagConfig(DatasetConfig):
     def get_eval_config(cls):
         from eval.eval_configs import MultipleChoiceConfig
         return MultipleChoiceConfig(choices=['0', '1', '2', '3'])
+
+
+############################################
+### DatasetMixer - Subclass of DatasetConfig
+############################################
+
+class DatasetMixer(DatasetConfig):
+    """Mix multiple datasets - works like any other DatasetConfig.
+    
+    Two strategies:
+    1. 'shuffle': Concatenate all datasets (DataLoader shuffles)
+    2. 'round_robin': Interleave samples from each dataset
+    """
+    
+    def __init__(
+        self,
+        dataset_ids: List[str],
+        strategy: Literal['shuffle', 'round_robin'] = 'shuffle',
+        seed: Optional[int] = 42
+    ):
+        """Initialize mixer.
+        
+        Args:
+            dataset_ids: List like ['openai/gsm8k.main', 'allenai/ai2_arc.ARC-Easy']
+            strategy: 'shuffle' or 'round_robin'
+            seed: Random seed for reproducibility
+        """
+        self.dataset_ids = dataset_ids
+        self.strategy = strategy
+        self.seed = seed
+        # Required by parent class
+        self.dataset_path = None
+        self.dataset_name = None
+    
+    def __new__(cls, *args, **kwargs):
+        # Override parent's __new__ which blocks instantiation
+        return object.__new__(cls)
+    
+    def id(self) -> str:
+        """Instance method override for unique identifier."""
+        return f"mixed_{self.strategy}_" + "+".join([ds.replace('/', '-') for ds in self.dataset_ids])
+    
+    def load_and_process(self, is_chat: bool, split: str = 'train') -> Dataset:
+        """Load and mix component datasets."""
+        datasets = []
+        
+        # Load each dataset using its config
+        for dataset_id in self.dataset_ids:
+            if '.' in dataset_id:
+                path, name = dataset_id.rsplit('.', 1)
+            else:
+                path, name = dataset_id, None
+            
+            config_cls = DatasetConfig.from_dataset_path(path, name)
+            ds = config_cls.load_and_process(is_chat=is_chat, split=split)
+            datasets.append(ds)
+        
+        # Mix according to strategy
+        if self.strategy == 'shuffle':
+            return concatenate_datasets(datasets)
+        else:  # round_robin
+            return interleave_datasets(
+                datasets,
+                seed=self.seed,
+                stopping_strategy='all_exhausted'
+            )
+    
+    # Implement abstract methods (not used for mixer)
+    @staticmethod
+    def chat_processor(batch: Dataset) -> ChatOutput:
+        raise NotImplementedError("DatasetMixer processes datasets directly")
+    
+    @staticmethod
+    def non_chat_processor(batch: Dataset) -> NonChatOutput:
+        raise NotImplementedError("DatasetMixer processes datasets directly")
+    
+    @classmethod
+    def get_eval_config(cls):
+        raise NotImplementedError("Mixed datasets don't support direct evaluation")
