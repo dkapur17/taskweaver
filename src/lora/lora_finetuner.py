@@ -1,3 +1,10 @@
+"""
+LoRA Finetuner Abstraction
+
+This module provides a high level abstraction for finetuning a chat or non-chat language mode
+on any dataset by providing its corresponding DatasetConfig, and relevant lora parameters
+"""
+
 from transformers import BitsAndBytesConfig, AutoModelForCausalLM, AutoTokenizer, AutoConfig, TrainingArguments
 from datasets import load_dataset, Dataset
 from peft import LoraConfig, get_peft_model
@@ -94,7 +101,7 @@ class LoraFinetuner:
             train_dataset=self.train_dataset,
             eval_dataset=self.test_dataset,
             processing_class=self.tokenizer,
-            args=training_args,
+            args=training_args
         )
 
         trainer.train()

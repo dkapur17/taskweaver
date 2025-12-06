@@ -15,7 +15,7 @@ from operator import attrgetter
 from functools import partial
 from transformers import AutoModelForCausalLM
 
-from dynamic_lora import DynamicLoraLinear
+from .dynamic_lora import DynamicLoraLinear
 
 
 class TaskWeaver(nn.Module):
@@ -30,7 +30,7 @@ class TaskWeaver(nn.Module):
         lm: Pre-trained language model
         hidden_dim: Hidden dimension for the hypernetwork
         lora_rank: Rank for LoRA decomposition
-        lora_target_layers: Names of layers to replace with LoRA
+        target_layers: Names of layers to targe for LoRA
         lora_alpha: Scaling factor for LoRA
         lora_dropout: Dropout probability for LoRA (default: 0.0)
         layers_module_name: Name of the layers module in the LM (default: 'layers')
@@ -42,7 +42,7 @@ class TaskWeaver(nn.Module):
         lm: AutoModelForCausalLM,
         hidden_dim: int,
         lora_rank: int,
-        lora_target_layers: List[str],
+        target_layers: List[str],
         lora_alpha: float,
         lora_dropout: float = 0.0,
         layers_module_name: str = 'layers',
@@ -50,7 +50,7 @@ class TaskWeaver(nn.Module):
     ):
         super().__init__()
         self.lm = lm
-        self.lora_target_layers = lora_target_layers
+        self.target_layers = target_layers
         self.lora_rank = lora_rank
         self.hidden_dim = hidden_dim
         self.lora_alpha = lora_alpha
@@ -77,13 +77,13 @@ class TaskWeaver(nn.Module):
 
         # Replace target linear layers with DynamicLoraLinear
         self.module_references, self.in_features, self.out_features = self.replace_linears(
-            self.lora_target_layers, lm_layers_ref, dynamic_lora_fn
+            self.target_layers, lm_layers_ref, dynamic_lora_fn
         )
 
         # Hypernetwork components
         self.semantic_proj = nn.Linear(self.lm_hidden_dim, hidden_dim)
 
-        self.module_embedding = nn.Embedding(len(lora_target_layers), hidden_dim)
+        self.module_embedding = nn.Embedding(len(target_layers), hidden_dim)
         self.matrix_embedding = nn.Embedding(2, hidden_dim)
         self.layer_embedding = nn.Embedding(self.lm_num_layers, hidden_dim)
 
@@ -101,7 +101,7 @@ class TaskWeaver(nn.Module):
             module_name: nn.ModuleDict({
                 'A': nn.Linear(hidden_dim, self.in_features[module_name] * self.lora_rank),
                 'B': nn.Linear(hidden_dim, self.out_features[module_name] * self.lora_rank)
-            }) for module_name in self.lora_target_layers
+            }) for module_name in self.target_layers
         })
 
         self._freeze_lm()
@@ -120,7 +120,7 @@ class TaskWeaver(nn.Module):
                     nn.init.zeros_(module.bias)
         
         # Initialize output heads to produce small initial LoRA weights
-        for module_name in self.lora_target_layers:
+        for module_name in self.target_layers:
             for matrix_name in ['A', 'B']:
                 head = self.heads[module_name][matrix_name]
                 nn.init.zeros_(head.weight)  # Start with zero weights
@@ -154,7 +154,7 @@ class TaskWeaver(nn.Module):
 
     def replace_linears(
         self,
-        lora_target_layers: List[str],
+        target_layers: List[str],
         lm_layers_ref: nn.ModuleList,
         dynamic_lora_fn: callable
     ) -> Tuple[List[Dict[str, DynamicLoraLinear]], Dict[str, int], Dict[str, int]]:
@@ -162,7 +162,7 @@ class TaskWeaver(nn.Module):
         Replace target Linear layers with DynamicLoraLinear layers.
 
         Args:
-            lora_target_layers: Names of layers to replace
+            target_layers: Names of layers to replace
             lm_layers_ref: Reference to the layers module
             dynamic_lora_fn: Function to create DynamicLoraLinear instances
 
@@ -179,7 +179,7 @@ class TaskWeaver(nn.Module):
                     continue
 
                 path, attribute = name.rsplit('.', 1)
-                if attribute not in lora_target_layers:
+                if attribute not in target_layers:
                     continue
 
                 parent_ref = attrgetter(path)(layer)
@@ -206,7 +206,7 @@ class TaskWeaver(nn.Module):
         self,
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor,
-        prompt_lengths: Optional[torch.Tensor] = None
+        prompt_length: Optional[torch.Tensor] = None
     ) -> List[Dict[str, Dict[Literal['A', 'B'], torch.Tensor]]]:
         """
         Forward pass through the hypernetwork to generate LoRA weights.
@@ -214,7 +214,7 @@ class TaskWeaver(nn.Module):
         Args:
             input_ids: Input token IDs
             attention_mask: Attention mask
-            prompt_lengths: Length of prompts in each sequence (optional)
+            prompt_length: Length of prompts in each sequence (optional)
 
         Returns:
             List of LoRA weights for each layer
@@ -223,12 +223,12 @@ class TaskWeaver(nn.Module):
 
         batch_size = input_ids.shape[0]
 
-        # Create prompt mask if prompt_lengths provided
-        if prompt_lengths is not None:
+        # Create prompt mask if prompt_length provided
+        if prompt_length is not None:
             seq_len = attention_mask.shape[1]
             positions = torch.arange(seq_len, device=input_ids.device).unsqueeze(0)
-            prompt_lengths_expanded = prompt_lengths.unsqueeze(1)
-            prompt_mask = (positions < prompt_lengths_expanded).long()
+            prompt_length_expanded = prompt_length.unsqueeze(1)
+            prompt_mask = (positions < prompt_length_expanded).long()
         else:
             prompt_mask = attention_mask
 
@@ -241,8 +241,8 @@ class TaskWeaver(nn.Module):
             )
             last_hidden = outputs.hidden_states[-1]
 
-            if prompt_lengths is not None:
-                last_prompt_indices = prompt_lengths - 1
+            if prompt_length is not None:
+                last_prompt_indices = prompt_length - 1
                 semantic_embedding = last_hidden[
                     torch.arange(batch_size, device=last_hidden.device),
                     last_prompt_indices
@@ -264,7 +264,7 @@ class TaskWeaver(nn.Module):
             layer_dict = {}
             layer_emb = self.layer_embedding.weight[layer_idx:layer_idx + 1]
 
-            for module_idx, module_name in enumerate(self.lora_target_layers):
+            for module_idx, module_name in enumerate(self.target_layers):
                 module_dict = {}
                 module_emb = self.module_embedding.weight[module_idx:module_idx + 1]
 
@@ -320,8 +320,9 @@ class TaskWeaver(nn.Module):
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor,
         labels: Optional[torch.Tensor] = None,
-        prompt_lengths: Optional[torch.Tensor] = None,
-        skip_hypernet: bool = False
+        prompt_length: Optional[torch.Tensor] = None,
+        skip_hypernet: bool = False,
+        **lm_kwargs
     ):
         """
         Forward pass through TaskWeaver.
@@ -330,7 +331,7 @@ class TaskWeaver(nn.Module):
             input_ids: Input token IDs
             attention_mask: Attention mask
             labels: Target labels for training (optional)
-            prompt_lengths: Length of prompts in each sequence (optional)
+            prompt_length: Length of prompts in each sequence (optional)
             skip_hypernet: If True, skip hypernetwork and use base model (default: False)
 
         Returns:
@@ -340,14 +341,15 @@ class TaskWeaver(nn.Module):
             lora_weights = self._hypernet_forward(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
-                prompt_lengths=prompt_lengths
+                prompt_length=prompt_length
             )
             self.inject_lora_weights(lora_weights)
 
         outputs = self.lm(
             input_ids=input_ids,
             attention_mask=attention_mask,
-            labels=labels
+            labels=labels,
+            **lm_kwargs
         )
 
         return outputs
@@ -357,7 +359,7 @@ class TaskWeaver(nn.Module):
         self,
         input_ids: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
-        prompt_lengths: Optional[torch.Tensor] = None,
+        prompt_length: Optional[torch.Tensor] = None,
         **generation_kwargs
     ):
         """
@@ -369,7 +371,7 @@ class TaskWeaver(nn.Module):
         Args:
             input_ids: Input token IDs
             attention_mask: Attention mask (optional)
-            prompt_lengths: Length of prompts in each sequence (optional)
+            prompt_length: Length of prompts in each sequence (optional)
             **generation_kwargs: Additional arguments passed to the LM's generate method
 
         Returns:
@@ -383,7 +385,7 @@ class TaskWeaver(nn.Module):
         lora_weights = self._hypernet_forward(
             input_ids=input_ids,
             attention_mask=attention_mask,
-            prompt_lengths=prompt_lengths
+            prompt_length=prompt_length
         )
 
         # Inject LoRA weights into the model
@@ -419,7 +421,7 @@ class TaskWeaver(nn.Module):
             'model_name': self.model_name,
             'hidden_dim': self.hidden_dim,
             'lora_rank': self.lora_rank,
-            'lora_target_layers': self.lora_target_layers,
+            'target_layers': self.target_layers,
             'lora_alpha': self.lora_alpha,
             'lora_dropout': self.lora_dropout,
             'layers_module_name': self.layers_module_name
@@ -486,7 +488,7 @@ class TaskWeaver(nn.Module):
             lm=lm,
             hidden_dim=config['hidden_dim'],
             lora_rank=config['lora_rank'],
-            lora_target_layers=config['lora_target_layers'],
+            target_layers=config['target_layers'],
             lora_alpha=config['lora_alpha'],
             lora_dropout=config['lora_dropout'],
             layers_module_name=config['layers_module_name'],
@@ -513,6 +515,11 @@ class TaskWeaver(nn.Module):
         """Get the device of the language model."""
         return self.lm.device
     
+    @property
+    def config(self):
+        """Passthrough for LM config, required by SFTTrainer"""
+        return self.lm.config
+
     def print_trainable_parameters(self):
         """Print the number of trainable parameters in the model."""
         trainable_params = 0
