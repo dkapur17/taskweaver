@@ -113,23 +113,15 @@ class DynamicLoraLinear(nn.Linear):
                 f"but LoRA A has batch_size={self.A.size(0)}. "
                 f"Old LoRA weights are being reused!"
             )
-
-        # Base linear transformation
-        out_base = F.linear(input, self.weight, None)
-
+        
         # Instance-level LoRA transformation
         out_delta = einsum(
-            self.A, self.B, input,
+            self.A, self.B, F.dropout(input, self.lora_dropout),
             'b r i, b o r, b s i -> b s o'
         )
 
-        # Combine base and LoRA with scaling
-        out = out_base + self.lora_scaling * out_delta
-
-        if self.bias is not None:
-            out += self.bias
-
-        return out
+        # Wx + b + s*BAx
+        return F.linear(input, self.weight, self.bias) + self.lora_scaling * out_delta
 
     def extra_repr(self) -> str:
         """String representation including LoRA parameters."""

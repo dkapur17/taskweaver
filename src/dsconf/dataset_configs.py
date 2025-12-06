@@ -77,6 +77,12 @@ class DatasetConfig(ABC):
     @classmethod
     def load_and_process(cls, is_chat: bool, split: str = 'train', enable_thinking: Optional[bool] = None) -> Dataset:
         """Load the HF dataset and process it."""
+
+        if 'train' in split:
+            split = split.replace('train', cls.train_split)
+        elif 'test' in split:
+            split = split.replace('test', cls.test_split)
+
         dataset = load_dataset(cls.dataset_path, cls.dataset_name, split=split)
         processor = cls.get_processor(is_chat)
         

@@ -90,7 +90,7 @@ def parse_args():
     """Parse commandline arguments"""
     parser = ArgumentParser(description="Train TaskWeaver Hypernetwork")
 
-    parser.add_argument('--model', type=str, default='EleutherAI/pythia-70M-deduped', help='Pretrained model path')
+    parser.add_argument('--model', type=str, default='EleutherAI/pythia-70m', help='Pretrained model path')
     parser.add_argument('--datasets', type=str, nargs='+', default=['all'], help="Datasets to include in Mixer")
     parser.add_argument('--output_dir', type=str, default='_models/hypernet', help='Base output directory for trained models')
     parser.add_argument('--device', type=str, default='auto', help="Device to train on")

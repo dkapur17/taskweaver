@@ -5,8 +5,8 @@ This module provides a high level abstraction for finetuning a chat or non-chat 
 on any dataset by providing its corresponding DatasetConfig, and relevant lora parameters
 """
 
-from transformers import BitsAndBytesConfig, AutoModelForCausalLM, AutoTokenizer, AutoConfig, TrainingArguments
-from datasets import load_dataset, Dataset
+from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments
+from datasets import Dataset
 from peft import LoraConfig, get_peft_model
 from trl import SFTTrainer
 import os
@@ -69,6 +69,22 @@ class LoraFinetuner:
 
         return train_dataset, test_dataset
     
+    def print_trainable_parameters(self):
+        """Print the number of trainable parameters in the model."""
+        trainable_params = 0
+        all_params = 0
+        
+        print("\n=== Trainable Parameters ===")
+        for name, param in self.model.named_parameters():
+            all_params += param.numel()
+            if param.requires_grad:
+                trainable_params += param.numel()
+                print(f"✓ {name}: {param.numel():,}")
+        
+        print(f"\nTotal params: {all_params:,}")
+        print(f"Trainable params: {trainable_params:,}")
+        print(f"Trainable %: {100 * trainable_params / all_params:.2f}%")
+    
     def train(
             self,
             num_train_epochs: float = 3.0,
@@ -79,6 +95,7 @@ class LoraFinetuner:
             logging_steps: int = 10,
             save_total_limit: int = 2,
             save_steps: int = 100,
+            run_eval:bool = False,
             **trainer_kwargs) -> None:
 
         training_args = TrainingArguments(
@@ -106,8 +123,9 @@ class LoraFinetuner:
 
         trainer.train()
 
-        metrics = trainer.evaluate()
-        print(f"Evaluation metrics: {metrics}")
+        if run_eval:
+            metrics = trainer.evaluate()
+            print(f"Evaluation metrics: {metrics}")
 
     def save(self):
         print(f"Saving mode to {self.output_dir}")

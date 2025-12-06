@@ -16,7 +16,7 @@ class LoraConfig:
 
 @dataclass
 class MixerConfig:
-    stopping_strategy: Literal['first_exhausted', 'all_exhausted']
+    stopping_strategy: Literal['first_exhausted', 'all_exhausted'] = 'first_exhausted'
 
 
 @dataclass
@@ -44,13 +44,14 @@ def parse_args() -> Namespace:
     parser.add_argument('--ignore_datasets', type=str, nargs='+', default=[], help='Datasets to ignore when using "all"')
     parser.add_argument('--device_map', type=str, default='auto', help='Device map for model loading')
     parser.add_argument('--output_dir', type=str, default='_models/lora', help='Base output directory for trained models')
+    parser.add_argument('--run_eval', action='store_true', help='Run evaluation after training')
     parser.add_class_arguments(LoraConfig, 'lora', help='LoRA configuration parameters')
     parser.add_class_arguments(TrainConfig, 'train', help='Training configuration parameters')
     parser.add_class_arguments(DatasetSplitConfig, 'dataset', help='Dataset split configuration')
     parser.add_class_arguments(MixerConfig, 'mixer', help='Configurations for DatasetMixer. Only used if "mix" is provided as a dataset.')
 
     # Override target_modules to support nargs='+'
-    parser.add_argument('--lora.target_modules', type=str, nargs='+', help='Target modules for LoRA (can specify multiple)')
+    parser.add_argument('--lora.target_modules', type=str, nargs='+', default=['q_proj', 'v_proj'], help='Target modules for LoRA (can specify multiple)')
 
     return parser.parse_args()
 
@@ -95,6 +96,8 @@ if __name__ == "__main__":
             output_dir=args.output_dir
         )
 
+        finetuner.print_trainable_parameters()
+
         finetuner.train(
             num_train_epochs=args.train.num_train_epochs,
             per_device_train_batch_size=args.train.per_device_train_batch_size,
@@ -104,6 +107,7 @@ if __name__ == "__main__":
             logging_steps=args.train.logging_steps,
             save_total_limit=args.train.save_total_limit,
             save_steps=args.train.save_steps,
+            run_eval=args.run_eval
         )
         finetuner.save()
     
