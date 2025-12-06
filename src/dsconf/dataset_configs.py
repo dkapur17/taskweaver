@@ -64,24 +64,31 @@ class DatasetConfig(ABC):
         return cls.non_chat_processor
     
     @classmethod
-    def _build_chat(cls, user_content:str, assistant_content:str) -> List[Message]:
+    def _build_chat_prompt_completion(cls, user_content:str, assistant_content:str) -> List[Message]:
         return [
             {'role': 'system', 'content': cls.system_message},
             {'role': 'user', 'content': user_content},
-            {'role': 'assistant', 'content': assistant_content}
-        ]
+        ], [{'role': 'assistant', 'content': assistant_content}]
         
     @classmethod
-    def _build_prompt(cls, question:str) -> str:
-        return f"Instruction: {cls.system_message}\nQuestion: {question}\nAnswer: "
+    def _build_text_prompt(cls, question:str) -> str:
+        return f"Instruction: {cls.system_message}\nQuestion: {question}\nAnswer:"
     
     @classmethod
-    def load_and_process(cls, is_chat: bool, split: str = 'train') -> Dataset:
+    def load_and_process(cls, is_chat: bool, split: str = 'train', enable_thinking: Optional[bool] = None) -> Dataset:
         """Load the HF dataset and process it."""
         dataset = load_dataset(cls.dataset_path, cls.dataset_name, split=split)
         processor = cls.get_processor(is_chat)
-        return dataset.map(processor, batched=True, remove_columns=dataset.column_names)
-    
+        
+        dataset = dataset.map(processor, batched=True, remove_columns=dataset.column_names)
+        assert set(dataset.column_names) == set(['prompt', 'completion']), f"Only prompt completion training supported. Modify {cls.id()} processor to return prompt and competion"
+        
+        # Injecting thinking argument if needed
+        if enable_thinking is not None:
+            dataset = dataset.map(lambda example: {**example, 'chat_template_kwargs': {'enable_thinking': enable_thinking}})
+        
+        return dataset
+
     @classmethod
     def id(cls) -> str:
         if cls.dataset_name is not None:
@@ -94,21 +101,20 @@ class DatasetConfig(ABC):
         if is_chat:
             # Extract prompts (system + user) and completions (assistant)
             X = []
-            y_true = []
+            y = []
             for messages in processed_data['messages']:
                 # Combine system and user messages for prompt
                 prompt_msgs = [msg for msg in messages if msg['role'] in ['system', 'user']]
                 X.append(prompt_msgs)
                 # Extract assistant response
                 assistant_msg = next((msg for msg in messages if msg['role'] == 'assistant'), None)
-                y_true.append(assistant_msg['content'] if assistant_msg else '')
-            return {'X': X, 'y_true': y_true, 'y_gt': y_true}
+                y.append(assistant_msg['content'] if assistant_msg else '')
+            return {'X': X, 'y': y}
         else:
             # Non-chat: prompts are X, completions are y
             return {
                 'X': processed_data['prompt'],
-                'y_true': processed_data['completion'],
-                'y_gt': processed_data['completion']
+                'y': processed_data['completion'],
             }
     
     @classmethod
@@ -127,10 +133,7 @@ class DatasetConfig(ABC):
         eval_format = cls.to_eval_format(processed_data, is_chat=is_chat)
         
         # Create dataset with X, y columns
-        dataset = Dataset.from_dict({
-            'X': eval_format['X'],
-            'y': eval_format['y_true']
-        })
+        dataset = Dataset.from_dict(**eval_format)
         
         # Get eval config
         eval_config = cls.get_eval_config()
@@ -147,7 +150,6 @@ class DatasetConfig(ABC):
 ### Per-Dataset Configs
 ############################################
 
-
 class ArcConfig(DatasetConfig):
     system_message = "Choose the most reasonable answer for the question from the given options. Repond only with A, B, C or D"
     train_split = 'train'
@@ -155,25 +157,29 @@ class ArcConfig(DatasetConfig):
 
     @staticmethod
     def chat_processor(batch: Dataset) -> ChatOutput:
-        chats = []
+
+        prompts = []
+        completions = []
 
         for question, choices, answer in zip(batch['question'], batch['choices'], batch['answerKey']):
             question = f"{question}\n" + "\n".join([f"{label}.{text}" for label, text in zip(choices['label'], choices['text'])])
-            chats.append(ArcEasyConfig._build_chat(question, answer))
+            prompt, completion = ArcConfig._build_chat_prompt_completion(question, answer)
+            prompts.append(prompt)
+            completions.append(completion)
 
-        return {'messages': chats}
-    
+        return {'prompt': prompts, 'completion': completions}
+        
     @staticmethod 
     def non_chat_processor(batch: Dataset) -> NonChatOutput:
         
         prompts = []
+        completions = []
 
-        for question, choices in zip(batch['question'], batch['choices']):
+        for question, choices, answer in zip(batch['question'], batch['choices'], batch['answerKey']):
             question = f"{question}\n" + "\n".join([f"{label}.{text}" for label, text in zip(choices['label'], choices['text'])])
-            prompts.append(ArcEasyConfig._build_prompt(question))
+            prompts.append(ArcEasyConfig._build_text_prompt(question))
+            completions.append(f" {answer}")
 
-        completions = batch['answerKey']
-        texts = [p + c for p, c in zip(prompts, completions)]
         return {'prompt': prompts, 'completion': completions}
     
     @classmethod
@@ -205,17 +211,25 @@ class GSM8KConfig(DatasetConfig):
     @staticmethod
     def chat_processor(batch: Dataset) -> ChatOutput:
 
-        chats = []
+        prompts = []
+        completions = []
 
         for question, answer in zip(batch['question'], batch['answer']):
-            chats.append(GSM8KConfig._build_chat(question, answer))
+            prompt, completion = GSM8KConfig._build_chat_prompt_completion(question, answer)
+            prompts.append(prompt)
+            completions.append(completion)
 
-        return {'messages': chats}
+        return {'prompt': prompts, 'completion': completions}
     
     @staticmethod
     def non_chat_processor(batch: Dataset) -> NonChatOutput:
-        prompts = [GSM8KConfig._build_prompt(q) for q in batch['question']]
-        completions = batch['answer']
+
+        prompts = []
+        completions = []
+
+        for question, answer in zip(batch['question'], batch['answer']):
+            prompts.append(GSM8KConfig._build_text_prompt(question))
+            completions.append(f" {answer}")
 
         return {'prompt': prompts, 'completion': completions}
     
@@ -224,7 +238,7 @@ class GSM8KConfig(DatasetConfig):
         from eval.eval_configs import NumericConfig
         return NumericConfig(tolerance=1e-1)
     
-    
+
 @DatasetConfig.register('google/boolq')
 class BoolQConfig(DatasetConfig):
 
@@ -234,13 +248,17 @@ class BoolQConfig(DatasetConfig):
 
     @staticmethod
     def chat_processor(batch: Dataset) -> ChatOutput:
-        chats = []
+
+        prompts = []
+        completions = []
 
         for passage, question, answer in zip(batch['passage'], batch['question'], batch['answer']):
             question = f"Passage: {passage}\n\nNow answer: {question}"
-            chats.append(BoolQConfig._build_chat(question, str(answer).lower()))
+            prompt, completion = BoolQConfig._build_chat_prompt_completion(question, answer)
+            prompts.append(prompt)
+            completions.append(completion)
 
-        return {'messages': chats}
+        return {'prompt': prompts, 'completion': completions}
     
     @staticmethod
     def non_chat_processor(batch: Dataset) -> NonChatOutput:
@@ -248,9 +266,9 @@ class BoolQConfig(DatasetConfig):
         prompts, completions = [], []
 
         for passage, question, answer in zip(batch['passage'], batch['question'], batch['answer']):
-            prompt = f"Instruction: {BoolQConfig.system_message}\nPassage: {passage}\nQuestion: {question}\nAnswer: "
+            prompt = f"Instruction: {BoolQConfig.system_message}\nPassage: {passage}\nQuestion: {question}\nAnswer:"
             prompts.append(prompt)
-            completions.append(str(answer).lower())
+            completions.append(f" {str(answer).lower()}")
 
         return {'prompt': prompts, 'completion': completions}
     
@@ -274,15 +292,19 @@ class SNLIConfig(DatasetConfig):
 
     @staticmethod
     def chat_processor(batch: Dataset) -> ChatOutput:
-        chats = []
+
+        prompts = []
+        completions = []
 
         for premise, hypothesis, label in zip(batch['premise'], batch['hypothesis'], batch['label']):
             if label == -1:
                 continue
             question = f"Premise: {premise}\nHypothesis: {hypothesis}"
-            chats.append(SNLIConfig._build_chat(question, SNLIConfig.label_map[label]))
+            prompt, completion = SNLIConfig._build_chat_prompt_completion(question, label)
+            prompts.append(prompt)
+            completions.append(completion)
         
-        return {'messages': chats}
+        return {'prompt': prompts, 'completion': completions}
     
     @staticmethod
     def non_chat_processor(batch: Dataset) -> NonChatOutput:
@@ -291,9 +313,9 @@ class SNLIConfig(DatasetConfig):
         for premise, hypothesis, label in zip(batch['premise'], batch['hypothesis'], batch['label']):
             if label == -1:
                 continue
-            prompt = f"Instruction: {SNLIConfig.system_message}\nPremise: {premise}\nHypothesis: {hypothesis}\nRelationship: "
+            prompt = f"Instruction: {SNLIConfig.system_message}\nPremise: {premise}\nHypothesis: {hypothesis}\nRelationship:"
             prompts.append(prompt)
-            completions.append(SNLIConfig.label_map[label])
+            completions.append(f" {SNLIConfig.label_map[label]}")
 
         return {'prompt': prompts, 'completion': completions}
     
@@ -303,7 +325,7 @@ class SNLIConfig(DatasetConfig):
         return ExactMatchConfig(case_sensitive=False)
 
 
-@DatasetConfig.register('winogrande', 'winogrande_xl')
+@DatasetConfig.register('winogrande', 'winogrande_m')
 class WinograndeConfig(DatasetConfig):
 
     system_message = "Fill in the blank with the correct option. Respond only with 1 or 2"
@@ -312,30 +334,35 @@ class WinograndeConfig(DatasetConfig):
 
     @staticmethod
     def chat_processor(batch: Dataset) -> ChatOutput:
-        chats = []
+        
+        prompts = []
+        completions = []
 
         for sentence, option1, option2, answer in zip(batch['sentence'], batch['option1'], batch['option2'], batch['answer']):
             question = f"{sentence}\n1. {option1}\n2. {option2}"
-            chats.append(WinograndeConfig._build_chat(question, answer))
+            prompt, completion = WinograndeConfig._build_chat_prompt_completion(question, answer)
+            prompts.append(prompt)
+            completions.append(completion)
 
-        return {'messages': chats}
+        return {'prompt': prompts, 'completion': completions}
     
     @staticmethod
     def non_chat_processor(batch: Dataset) -> NonChatOutput:
         prompts = []
+        completions = []
 
-        for sentence, option1, option2 in zip(batch['sentence'], batch['option1'], batch['option2']):
+        for sentence, option1, option2, answer in zip(batch['sentence'], batch['option1'], batch['option2'], batch['answer']):
             question = f"{sentence}\n1. {option1}\n2. {option2}"
-            prompts.append(WinograndeConfig._build_prompt(question))
+            prompts.append(WinograndeConfig._build_text_prompt(question))
+            completions.append(f" {answer}")
 
-        completions = batch['answer']
         return {'prompt': prompts, 'completion': completions}
     
     @classmethod
     def get_eval_config(cls):
         from eval.eval_configs import MultipleChoiceConfig
         return MultipleChoiceConfig(choices=['1', '2'])
-
+    
 
 @DatasetConfig.register('allenai/openbookqa', 'main')
 class OpenBookQAConfig(DatasetConfig):
@@ -346,23 +373,29 @@ class OpenBookQAConfig(DatasetConfig):
 
     @staticmethod
     def chat_processor(batch: Dataset) -> ChatOutput:
-        chats = []
+        
+        prompts = []
+        completions = []
 
         for question_stem, choices, answer_key in zip(batch['question_stem'], batch['choices'], batch['answerKey']):
             question = f"{question_stem}\n" + "\n".join([f"{label}. {text}" for label, text in zip(choices['label'], choices['text'])])
-            chats.append(OpenBookQAConfig._build_chat(question, answer_key))
+            prompt, completion = OpenBookQAConfig._build_chat_prompt_completion(question, answer_key)
+            prompts.append(prompt)
+            completions.append(completion)
 
-        return {'messages': chats}
+        return {'prompt': prompts, 'completion': completions}
     
     @staticmethod
     def non_chat_processor(batch: Dataset) -> NonChatOutput:
+
         prompts = []
+        completions = []
 
-        for question_stem, choices in zip(batch['question_stem'], batch['choices']):
+        for question_stem, choices, answer in zip(batch['question_stem'], batch['choices'], batch['answerKey']):
             question = f"{question_stem}\n" + "\n".join([f"{label}. {text}" for label, text in zip(choices['label'], choices['text'])])
-            prompts.append(OpenBookQAConfig._build_prompt(question))
+            prompts.append(OpenBookQAConfig._build_text_prompt(question))
+            completions.append(f" {answer}")    
 
-        completions = batch['answerKey']
         return {'prompt': prompts, 'completion': completions}
     
     @classmethod
@@ -384,33 +417,38 @@ class HellaSwagConfig(DatasetConfig):
 
     @staticmethod
     def chat_processor(batch: Dataset) -> ChatOutput:
-        chats = []
+        
+        prompts = []
+        completions = []
 
         for ctx, activity_label, endings, label in zip(batch['ctx'], batch['activity_label'], batch['endings'], batch['label']):
             context = f"{activity_label}: {ctx}" if activity_label else ctx
             question = f"{context}\n" + "\n".join([f"{i}. {ending}" for i, ending in enumerate(endings)])
-            chats.append(HellaSwagConfig._build_chat(question, label))
+            prompt, completion = HellaSwagConfig._build_chat_prompt_completion(question, label)
+            prompts.append(prompt)
+            completions.append(completion)
 
-        return {'messages': chats}
+        return {'prompt': prompts, 'completion': completions}
     
     @staticmethod
     def non_chat_processor(batch: Dataset) -> NonChatOutput:
+        
         prompts = []
+        completions = []
 
-        for ctx, activity_label, endings in zip(batch['ctx'], batch['activity_label'], batch['endings']):
+        for ctx, activity_label, endings, label in zip(batch['ctx'], batch['activity_label'], batch['endings'], batch['label']):
             context = f"{activity_label}: {ctx}" if activity_label else ctx
             question = f"{context}\n" + "\n".join([f"{i}. {ending}" for i, ending in enumerate(endings)])
-            prompts.append(HellaSwagConfig._build_prompt(question))
+            prompts.append(HellaSwagConfig._build_text_prompt(question))
+            completions.append(f" {label}")
 
-        completions = batch['label']
         return {'prompt': prompts, 'completion': completions}
     
     @classmethod
     def get_eval_config(cls):
         from eval.eval_configs import MultipleChoiceConfig
         return MultipleChoiceConfig(choices=['0', '1', '2', '3'])
-
-
+    
 class DatasetMixer(DatasetConfig):
     """Mix of multiple datasets that can be used anywhere a DatasetConfig is expected."""
     
@@ -570,3 +608,4 @@ class DatasetMixer(DatasetConfig):
         if len(self._dataset_configs) <= 5:
             return f"DatasetMix({[c.id() for c in self._dataset_configs]})"
         return f"DatasetMix([{self._dataset_configs[0].id()}, ..., {self._dataset_configs[-1].id()}] ({len(self)} datasets))"
+    
