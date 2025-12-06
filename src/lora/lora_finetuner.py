@@ -95,7 +95,6 @@ class LoraFinetuner:
             eval_dataset=self.test_dataset,
             processing_class=self.tokenizer,
             args=training_args,
-            dataset_text_field='text' if not self.is_chat else None
         )
 
         trainer.train()

@@ -1,7 +1,6 @@
-from datasets import Dataset
 from abc import ABC, abstractmethod
-from datasets import load_dataset, Dataset
-from typing import List, Literal, TypedDict, Dict, Type, Optional, Tuple
+from datasets import load_dataset, Dataset, interleave_datasets
+from typing import List, Literal, TypedDict, Dict, Type, Optional, Tuple, Union, Callable
 
 class Message(TypedDict):
     role: Literal['system', 'user', 'assistant']
@@ -13,8 +12,6 @@ class ChatOutput(TypedDict):
 class NonChatOutput(TypedDict):
     prompt: List[str]
     completion: List[str]
-    text: List[str]
-
 
 class DatasetConfig(ABC):
 
@@ -61,7 +58,7 @@ class DatasetConfig(ABC):
         ...
     
     @classmethod
-    def get_processor(cls, is_chat:bool):
+    def get_processor(cls, is_chat:bool) -> Union[Callable[[Dataset], ChatOutput], Callable[[Dataset], NonChatOutput]]:
         if is_chat:
             return cls.chat_processor
         return cls.non_chat_processor
@@ -150,11 +147,8 @@ class DatasetConfig(ABC):
 ### Per-Dataset Configs
 ############################################
 
-    
 
-@DatasetConfig.register('allenai/ai2_arc', 'ARC-Easy')
-class ArcEasyConfig(DatasetConfig):
-
+class ArcConfig(DatasetConfig):
     system_message = "Choose the most reasonable answer for the question from the given options. Repond only with A, B, C or D"
     train_split = 'train'
     test_split = 'test'
@@ -180,7 +174,7 @@ class ArcEasyConfig(DatasetConfig):
 
         completions = batch['answerKey']
         texts = [p + c for p, c in zip(prompts, completions)]
-        return {'prompt': prompts, 'completion': completions, 'text': texts}
+        return {'prompt': prompts, 'completion': completions}
     
     @classmethod
     def get_eval_config(cls):
@@ -191,7 +185,15 @@ class ArcEasyConfig(DatasetConfig):
         for example in sample:
             all_labels.update(example['choices']['label'])
         return MultipleChoiceConfig(choices=sorted(all_labels))
-    
+
+@DatasetConfig.register('allenai/ai2_arc', 'ARC-Easy')
+class ArcEasyConfig(ArcConfig):
+    pass
+
+@DatasetConfig.register('allenai/ai2_arc', 'ARC-Challenge')
+class ArcChallengeConfig(ArcConfig):
+    pass
+
 
 @DatasetConfig.register('openai/gsm8k', 'main')
 class GSM8KConfig(DatasetConfig):
@@ -214,8 +216,8 @@ class GSM8KConfig(DatasetConfig):
     def non_chat_processor(batch: Dataset) -> NonChatOutput:
         prompts = [GSM8KConfig._build_prompt(q) for q in batch['question']]
         completions = batch['answer']
-        texts = [p + c for p, c in zip(prompts, completions)]
-        return {'prompt': prompts, 'completion': completions, 'text': texts}
+
+        return {'prompt': prompts, 'completion': completions}
     
     @classmethod
     def get_eval_config(cls):
@@ -250,8 +252,7 @@ class BoolQConfig(DatasetConfig):
             prompts.append(prompt)
             completions.append(str(answer).lower())
 
-        texts = [p + c for p, c in zip(prompts, completions)]
-        return {'prompt': prompts, 'completion': completions, 'text': texts}
+        return {'prompt': prompts, 'completion': completions}
     
     @classmethod
     def get_eval_config(cls):
@@ -294,8 +295,7 @@ class SNLIConfig(DatasetConfig):
             prompts.append(prompt)
             completions.append(SNLIConfig.label_map[label])
 
-        texts = [p + c for p, c in zip(prompts, completions)]
-        return {'prompt': prompts, 'completion': completions, 'text': texts}
+        return {'prompt': prompts, 'completion': completions}
     
     @classmethod
     def get_eval_config(cls):
@@ -329,8 +329,7 @@ class WinograndeConfig(DatasetConfig):
             prompts.append(WinograndeConfig._build_prompt(question))
 
         completions = batch['answer']
-        texts = [p + c for p, c in zip(prompts, completions)]
-        return {'prompt': prompts, 'completion': completions, 'text': texts}
+        return {'prompt': prompts, 'completion': completions}
     
     @classmethod
     def get_eval_config(cls):
@@ -364,8 +363,7 @@ class OpenBookQAConfig(DatasetConfig):
             prompts.append(OpenBookQAConfig._build_prompt(question))
 
         completions = batch['answerKey']
-        texts = [p + c for p, c in zip(prompts, completions)]
-        return {'prompt': prompts, 'completion': completions, 'text': texts}
+        return {'prompt': prompts, 'completion': completions}
     
     @classmethod
     def get_eval_config(cls):
@@ -405,10 +403,170 @@ class HellaSwagConfig(DatasetConfig):
             prompts.append(HellaSwagConfig._build_prompt(question))
 
         completions = batch['label']
-        texts = [p + c for p, c in zip(prompts, completions)]
-        return {'prompt': prompts, 'completion': completions, 'text': texts}
+        return {'prompt': prompts, 'completion': completions}
     
     @classmethod
     def get_eval_config(cls):
         from eval.eval_configs import MultipleChoiceConfig
         return MultipleChoiceConfig(choices=['0', '1', '2', '3'])
+
+
+class DatasetMixer(DatasetConfig):
+    """Mix of multiple datasets that can be used anywhere a DatasetConfig is expected."""
+    
+    # Override to allow instantiation (parent raises TypeError)
+    def __new__(cls, *args, **kwargs):
+        return object.__new__(cls)
+    
+    def __init__(
+        self, 
+        datasets: Optional[List[Union[Tuple[str, Optional[str]], str, Type[DatasetConfig]]]] = None, # ('openai/gsm8k', 'main), 'openai/gsm8k.main', 'GSM8KConfig' all work
+        probabilities: Optional[List[float]] = None,
+        seed: Optional[int] = None,
+        stopping_strategy: Literal['first_exhausted', 'all_exhausted'] = 'first_exhausted'
+    ):
+        """
+        Args:
+            datasets: List of dataset identifiers. Can be:
+                     - (dataset_path, dataset_name) tuples
+                     - "dataset_path.dataset_name" strings  
+                     - DatasetConfig subclasses directly
+                     If None, uses all registered datasets.
+            probabilities: Sampling probabilities for each dataset. 
+                          If None, samples uniformly.
+            seed: Random seed for interleaving.
+            stopping_strategy: 'first_exhausted' or 'all_exhausted'.
+        """
+        self._dataset_configs = self._resolve_datasets(datasets)
+        self._probabilities = probabilities
+        self._seed = seed
+        self._stopping_strategy = stopping_strategy
+        
+        # Set attributes that parent class methods might expect
+        self.train_split = 'train'
+        self.test_split = 'test'
+        self.system_message = ''
+    
+    def _resolve_datasets(
+        self, 
+        datasets: Optional[List[Union[Tuple[str, Optional[str]], str, Type[DatasetConfig]]]]
+    ) -> List[Type[DatasetConfig]]:
+        """Resolve dataset specifications to DatasetConfig classes."""
+        if datasets is None:
+            return [
+                DatasetConfig.from_dataset_path(path, name) 
+                for path, name in DatasetConfig.list_available()
+            ]
+        
+        configs = []
+        for ds in datasets:
+            if isinstance(ds, tuple):
+                path = ds[0]
+                name = ds[1] if len(ds) > 1 else None
+                configs.append(DatasetConfig.from_dataset_path(path, name))
+            elif isinstance(ds, str):
+                # Parse "path.name" format carefully with paths like "allenai/ai2_arc"
+                if '/' in ds:
+                    last_segment = ds.split('/')[-1]
+                    if '.' in last_segment:
+                        idx = ds.rfind('.')
+                        path, name = ds[:idx], ds[idx+1:]
+                    else:
+                        path, name = ds, None
+                else:
+                    path, name = ds, None
+                configs.append(DatasetConfig.from_dataset_path(path, name))
+            elif isinstance(ds, type) and issubclass(ds, DatasetConfig):
+                configs.append(ds)
+            else:
+                raise ValueError(f"Unknown dataset specification: {ds}")
+        
+        return configs
+    
+    # === Implement abstract methods (required by ABC) ===
+    
+    @staticmethod
+    def chat_processor(batch: Dataset) -> ChatOutput:
+        raise NotImplementedError(
+            "DatasetMix doesn't have a single chat_processor. Use load_and_process() directly."
+        )
+    
+    @staticmethod
+    def non_chat_processor(batch: Dataset) -> NonChatOutput:
+        raise NotImplementedError(
+            "DatasetMix doesn't have a single non_chat_processor. Use load_and_process() directly."
+        )
+    
+    def get_eval_config(self):
+        raise NotImplementedError(
+            "DatasetMix contains multiple eval configs. Access individual configs via .dataset_configs"
+        )
+    
+    # === Override parent methods as instance methods ===
+    
+    def load_and_process(self, is_chat: bool, split: str = 'train') -> Dataset:
+        """Load and process all datasets, then interleave them."""
+        processed_datasets = []
+        valid_configs = []
+        
+        for config in self._dataset_configs:
+            if split == 'train':
+                actual_split = config.train_split or 'train'
+            elif split == 'test':
+                actual_split = config.test_split or 'test'
+            else:
+                actual_split = split
+            
+            try:
+                processed = config.load_and_process(is_chat=is_chat, split=actual_split)
+                processed_datasets.append(processed)
+                valid_configs.append(config)
+            except Exception as e:
+                print(f"Warning: Failed to load {config.id()}: {e}")
+                continue
+        
+        if not processed_datasets:
+            raise ValueError("No datasets were successfully loaded")
+        
+        self._dataset_configs = valid_configs
+        
+        if len(processed_datasets) == 1:
+            return processed_datasets[0]
+        
+        probs = self._probabilities
+        if probs is not None and len(probs) != len(processed_datasets):
+            print(f"Warning: Adjusting probabilities from {len(probs)} to {len(processed_datasets)} datasets")
+            probs = None
+        
+        return interleave_datasets(
+            processed_datasets,
+            probabilities=probs,
+            seed=self._seed,
+            stopping_strategy=self._stopping_strategy
+        )
+    
+    def id(self) -> str:
+        """Return identifier for this mix."""
+        ids = [c.id().replace("/", "_").replace(".", "_") for c in self._dataset_configs]
+        if len(ids) <= 3:
+            return "mix_" + "_".join(ids)
+        return f"mix_{len(ids)}_datasets"
+    
+    # === Additional utility methods ===
+    
+    @property 
+    def dataset_configs(self) -> List[Type[DatasetConfig]]:
+        """Return the list of dataset configs in this mix."""
+        return self._dataset_configs
+    
+    @property
+    def num_tasks(self) -> int:
+        return len(self._dataset_configs)
+    
+    def __len__(self) -> int:
+        return len(self._dataset_configs)
+    
+    def __repr__(self) -> str:
+        if len(self._dataset_configs) <= 5:
+            return f"DatasetMix({[c.id() for c in self._dataset_configs]})"
+        return f"DatasetMix([{self._dataset_configs[0].id()}, ..., {self._dataset_configs[-1].id()}] ({len(self)} datasets))"

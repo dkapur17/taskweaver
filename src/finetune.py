@@ -1,10 +1,10 @@
 from jsonargparse import ArgumentParser, Namespace
 from dataclasses import dataclass, field
 
-from dsconf import DatasetConfig
+from dsconf import DatasetConfig, DatasetMixer
 from lora import LoraFinetuner
 
-from typing import List, Type, Optional
+from typing import List, Type, Optional, Literal
 
 
 @dataclass
@@ -12,6 +12,11 @@ class LoraConfig:
     rank: int = 2
     alpha: int = 8
     dropout: float = 0.05
+
+
+@dataclass
+class MixerConfig:
+    stopping_strategy: Literal['first_exhausted', 'all_exhausted']
 
 
 @dataclass
@@ -42,13 +47,14 @@ def parse_args() -> Namespace:
     parser.add_class_arguments(LoraConfig, 'lora', help='LoRA configuration parameters')
     parser.add_class_arguments(TrainConfig, 'train', help='Training configuration parameters')
     parser.add_class_arguments(DatasetSplitConfig, 'dataset', help='Dataset split configuration')
+    parser.add_class_arguments(MixerConfig, 'mixer', help='Configurations for DatasetMixer. Only used if "mix" is provided as a dataset.')
 
     # Override target_modules to support nargs='+'
     parser.add_argument('--lora.target_modules', type=str, nargs='+', help='Target modules for LoRA (can specify multiple)')
 
     return parser.parse_args()
 
-def get_dataset_configs(datasets: List[str], ignore_list: List[str]) -> List[Type[DatasetConfig]]:
+def get_dataset_configs(datasets: List[str], ignore_list: List[str], mixer_config: MixerConfig) -> List[Type[DatasetConfig]]:
 
     configs = []
 
@@ -58,19 +64,21 @@ def get_dataset_configs(datasets: List[str], ignore_list: List[str]) -> List[Typ
                 configs.append(DatasetConfig.from_dataset_path(path, name))
     else:
         for dataset in datasets:
-            if '.' in dataset:
-                path, name = dataset.split('.')
+            if dataset == 'mix':
+                configs.append(DatasetMixer(stopping_strategy=mixer_config.stopping_strategy))
             else:
-                path, name = dataset, None
-            configs.append(DatasetConfig.from_dataset_path(path, name))
+                if '.' in dataset:
+                    path, name = dataset.split('.')
+                else:
+                    path, name = dataset, None
+                configs.append(DatasetConfig.from_dataset_path(path, name))
 
     return configs
 
 if __name__ == "__main__":
 
     args = parse_args()
-
-    dataset_configs = get_dataset_configs(args.datasets, args.ignore_datasets)
+    dataset_configs = get_dataset_configs(args.datasets, args.ignore_datasets, args.mixer)
 
     for config in dataset_configs:
         print(f"Finetuning for dataset: {config.id()}")
