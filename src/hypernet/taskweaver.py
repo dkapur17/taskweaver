@@ -30,7 +30,7 @@ class TaskWeaver(nn.Module):
         lm: Pre-trained language model
         hidden_dim: Hidden dimension for the hypernetwork
         lora_rank: Rank for LoRA decomposition
-        target_layers: Names of layers to targe for LoRA
+        target_modules: Names of layers to targe for LoRA
         lora_alpha: Scaling factor for LoRA
         lora_dropout: Dropout probability for LoRA (default: 0.0)
         layers_module_name: Name of the layers module in the LM (default: 'layers')
@@ -42,7 +42,7 @@ class TaskWeaver(nn.Module):
         lm: AutoModelForCausalLM,
         hidden_dim: int,
         lora_rank: int,
-        target_layers: List[str],
+        target_modules: List[str],
         lora_alpha: float,
         lora_dropout: float = 0.0,
         layers_module_name: str = 'layers',
@@ -50,7 +50,7 @@ class TaskWeaver(nn.Module):
     ):
         super().__init__()
         self.lm = lm
-        self.target_layers = target_layers
+        self.target_modules = target_modules
         self.lora_rank = lora_rank
         self.hidden_dim = hidden_dim
         self.lora_alpha = lora_alpha
@@ -77,13 +77,13 @@ class TaskWeaver(nn.Module):
 
         # Replace target linear layers with DynamicLoraLinear
         self.module_references, self.in_features, self.out_features = self.replace_linears(
-            self.target_layers, lm_layers_ref, dynamic_lora_fn
+            self.target_modules, lm_layers_ref, dynamic_lora_fn
         )
 
         # Hypernetwork components
         self.semantic_proj = nn.Linear(self.lm_hidden_dim, hidden_dim)
 
-        self.module_embedding = nn.Embedding(len(target_layers), hidden_dim)
+        self.module_embedding = nn.Embedding(len(target_modules), hidden_dim)
         self.matrix_embedding = nn.Embedding(2, hidden_dim)
         self.layer_embedding = nn.Embedding(self.lm_num_layers, hidden_dim)
 
@@ -101,7 +101,7 @@ class TaskWeaver(nn.Module):
             module_name: nn.ModuleDict({
                 'A': nn.Linear(hidden_dim, self.in_features[module_name] * self.lora_rank),
                 'B': nn.Linear(hidden_dim, self.out_features[module_name] * self.lora_rank)
-            }) for module_name in self.target_layers
+            }) for module_name in self.target_modules
         })
 
         self._freeze_lm()
@@ -120,7 +120,7 @@ class TaskWeaver(nn.Module):
                     nn.init.zeros_(module.bias)
         
         # Initialize output heads to produce small initial LoRA weights
-        for module_name in self.target_layers:
+        for module_name in self.target_modules:
             for matrix_name in ['A', 'B']:
                 head = self.heads[module_name][matrix_name]
                 nn.init.zeros_(head.weight)  # Start with zero weights
@@ -154,7 +154,7 @@ class TaskWeaver(nn.Module):
 
     def replace_linears(
         self,
-        target_layers: List[str],
+        target_modules: List[str],
         lm_layers_ref: nn.ModuleList,
         dynamic_lora_fn: callable
     ) -> Tuple[List[Dict[str, DynamicLoraLinear]], Dict[str, int], Dict[str, int]]:
@@ -162,7 +162,7 @@ class TaskWeaver(nn.Module):
         Replace target Linear layers with DynamicLoraLinear layers.
 
         Args:
-            target_layers: Names of layers to replace
+            target_modules: Names of layers to replace
             lm_layers_ref: Reference to the layers module
             dynamic_lora_fn: Function to create DynamicLoraLinear instances
 
@@ -179,7 +179,7 @@ class TaskWeaver(nn.Module):
                     continue
 
                 path, attribute = name.rsplit('.', 1)
-                if attribute not in target_layers:
+                if attribute not in target_modules:
                     continue
 
                 parent_ref = attrgetter(path)(layer)
@@ -264,7 +264,7 @@ class TaskWeaver(nn.Module):
             layer_dict = {}
             layer_emb = self.layer_embedding.weight[layer_idx:layer_idx + 1]
 
-            for module_idx, module_name in enumerate(self.target_layers):
+            for module_idx, module_name in enumerate(self.target_modules):
                 module_dict = {}
                 module_emb = self.module_embedding.weight[module_idx:module_idx + 1]
 
@@ -421,7 +421,7 @@ class TaskWeaver(nn.Module):
             'model_name': self.model_name,
             'hidden_dim': self.hidden_dim,
             'lora_rank': self.lora_rank,
-            'target_layers': self.target_layers,
+            'target_modules': self.target_modules,
             'lora_alpha': self.lora_alpha,
             'lora_dropout': self.lora_dropout,
             'layers_module_name': self.layers_module_name
@@ -488,7 +488,7 @@ class TaskWeaver(nn.Module):
             lm=lm,
             hidden_dim=config['hidden_dim'],
             lora_rank=config['lora_rank'],
-            target_layers=config['target_layers'],
+            target_modules=config['target_modules'],
             lora_alpha=config['lora_alpha'],
             lora_dropout=config['lora_dropout'],
             layers_module_name=config['layers_module_name'],

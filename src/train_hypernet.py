@@ -8,7 +8,7 @@ with TensorBoard logging support.
 import os
 from jsonargparse import ArgumentParser, Namespace
 from dataclasses import dataclass
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Literal
 from dotenv import load_dotenv
 
 import torch
@@ -79,12 +79,10 @@ class TrainConfig:
     learning_rate: float = 5e-5
     bf16: bool = False
     logging_steps: int = 10
-    save_total_limit: int = 1
-    save_steps: int = 100
 
 @dataclass
 class MixerConfig:
-    seed: Optiona[int] = None
+    seed: Optional[int] = None
     stopping_strategy: Literal['first_exhausted', 'all_exhausted'] = 'first_exhausted'
 
 
@@ -99,7 +97,7 @@ def parse_args():
     parser.add_class_arguments(HypernetConfig, 'hypernet', help='TaskWeaver configuration')
     parser.add_class_arguments(TrainConfig, 'train', help='Training configuration parameters')
     parser.add_class_arguments(MixerConfig, 'mixer', help='DatasetMixer configuration parameters')
-    parser.add_argument('--hypernet.target_layers', type=str, nargs='+', default=['query_key_value'], help='Modules to generate LoRA weights for')
+    parser.add_argument('--hypernet.target_modules', type=str, nargs='+', default=['query_key_value'], help='Modules to generate LoRA weights for')
 
     return parser.parse_args()
 
@@ -150,6 +148,7 @@ def main():
     args = parse_args()
 
     hf_token = os.environ.get('HF_TOKEN')
+    print(hf_token)
     if hf_token:
         from huggingface_hub import login
         login(token=hf_token)
@@ -170,6 +169,7 @@ def main():
 
     train_dataset, test_dataset, dataset_id = prepare_datasets(
                                     datasets=args.datasets, 
+                                    mixer_conf=args.mixer,
                                     is_chat=tokenizer.chat_template is not None
                                     )
     
@@ -178,7 +178,7 @@ def main():
         hidden_dim=args.hypernet.hidden_dim,
         lora_rank=args.hypernet.lora_rank,
         lora_alpha=args.hypernet.lora_alpha,
-        target_layers=args.hypernet.target_layers,
+        target_modules=args.hypernet.target_modules,
         lora_dropout=args.hypernet.lora_dropout,
         model_name=args.model
     )
@@ -201,8 +201,7 @@ def main():
         learning_rate=args.train.learning_rate,
         bf16=args.train.bf16,
         logging_steps=args.train.logging_steps,
-        save_total_limit=args.train.save_total_limit,
-        save_steps=args.train.save_steps,
+        save_strategy='no'
     )
 
     trainer = SFTTrainer(
