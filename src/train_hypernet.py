@@ -129,11 +129,6 @@ def prepare_datasets(datasets: List[str], mixer_conf:MixerConfig, is_chat: bool,
     Get train and test datasets
     """
     print(f"Loading {'Chat' if is_chat else 'Non-Chat'} version of the datasets")
-
-    if 'all' in datasets:
-        datasets = None
-    else:
-        datasets = datasets
     
     datasets = datasets if 'all' not in datasets else None
 
@@ -148,7 +143,6 @@ def main():
     args = parse_args()
 
     hf_token = os.environ.get('HF_TOKEN')
-    print(hf_token)
     if hf_token:
         from huggingface_hub import login
         login(token=hf_token)

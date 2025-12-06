@@ -254,7 +254,7 @@ class BoolQConfig(DatasetConfig):
 
         for passage, question, answer in zip(batch['passage'], batch['question'], batch['answer']):
             question = f"Passage: {passage}\n\nNow answer: {question}"
-            prompt, completion = BoolQConfig._build_chat_prompt_completion(question, answer)
+            prompt, completion = BoolQConfig._build_chat_prompt_completion(question, str(answer).lower())
             prompts.append(prompt)
             completions.append(completion)
 
@@ -300,7 +300,7 @@ class SNLIConfig(DatasetConfig):
             if label == -1:
                 continue
             question = f"Premise: {premise}\nHypothesis: {hypothesis}"
-            prompt, completion = SNLIConfig._build_chat_prompt_completion(question, label)
+            prompt, completion = SNLIConfig._build_chat_prompt_completion(question, SNLIConfig.label_map[label])
             prompts.append(prompt)
             completions.append(completion)
         
