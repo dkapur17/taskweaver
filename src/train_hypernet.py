@@ -80,6 +80,7 @@ class TrainConfig:
     bf16: bool = False
     logging_steps: int = 10
     warmup_ratio: float = 0.1
+    dataloader_pin_memory: bool = False  # Avoid DataParallel issues
 
 @dataclass
 class MixerConfig:
@@ -158,6 +159,14 @@ def main():
     else:
         device = args.device
 
+    # Force single GPU to avoid DataParallel issues
+    # TaskWeaver's dynamic LoRA injection stores weights as instance attributes,
+    # which don't replicate properly across DataParallel's model copies
+    if device == 'cuda' and torch.cuda.device_count() > 1:
+        print(f"Warning: Multiple GPUs detected ({torch.cuda.device_count()}). "
+              "Forcing single GPU mode for TaskWeaver compatibility.")
+        os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+
     print(f"Using device: {device}")
 
     lm, tokenizer = load_model_and_tokenizer(args.model)
@@ -199,6 +208,10 @@ def main():
         logging_steps=args.train.logging_steps,
         warmup_ratio=args.train.warmup_ratio,
         save_strategy='no'
+        # Disable DataParallel - TaskWeaver's dynamic LoRA injection doesn't support it
+        # The hypernetwork generates weights that are stored as instance attributes,
+        # which don't properly replicate across DataParallel's model copies
+        dataloader_pin_memory=args.train.dataloader_pin_memory,
     )
 
     trainer = SFTTrainer(

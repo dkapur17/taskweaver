@@ -354,7 +354,7 @@ class TaskWeaver(nn.Module):
 
         return outputs
 
-    @torch.no_grad
+    @torch.no_grad()
     def generate(
         self,
         input_ids: torch.Tensor,
