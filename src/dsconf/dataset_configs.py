@@ -461,10 +461,10 @@ class HellaSwagConfig(DatasetConfig):
         return MultipleChoiceConfig(choices=['0', '1', '2', '3'])
 
 
-@DatasetConfig.register('allenai/social_i_qa')
-class SocialIQAConfig(DatasetConfig):
+@DatasetConfig.register('tau/commonsense_qa')
+class CommonsenseQAConfig(DatasetConfig):
 
-    system_message = "Answer the question about social interactions by choosing the most appropriate option. Respond only with A, B, or C"
+    system_message = "Answer the commonsense reasoning question by choosing the most appropriate option. Respond only with A, B, C, D, or E"
     train_split = 'train'
     test_split = 'validation'
 
@@ -474,14 +474,9 @@ class SocialIQAConfig(DatasetConfig):
         prompts = []
         completions = []
 
-        for context, question, answerA, answerB, answerC, label in zip(
-            batch['context'], batch['question'], batch['answerA'], 
-            batch['answerB'], batch['answerC'], batch['label']
-        ):
-            full_question = f"{context}\n{question}\nA. {answerA}\nB. {answerB}\nC. {answerC}"
-            # Convert label '1', '2', '3' to 'A', 'B', 'C'
-            answer = chr(ord('A') + int(label) - 1)
-            prompt, completion = SocialIQAConfig._build_chat_prompt_completion(full_question, answer)
+        for question, choices, answer_key in zip(batch['question'], batch['choices'], batch['answerKey']):
+            full_question = f"{question}\n" + "\n".join([f"{label}. {text}" for label, text in zip(choices['label'], choices['text'])])
+            prompt, completion = CommonsenseQAConfig._build_chat_prompt_completion(full_question, answer_key)
             prompts.append(prompt)
             completions.append(completion)
 
@@ -493,22 +488,17 @@ class SocialIQAConfig(DatasetConfig):
         prompts = []
         completions = []
 
-        for context, question, answerA, answerB, answerC, label in zip(
-            batch['context'], batch['question'], batch['answerA'], 
-            batch['answerB'], batch['answerC'], batch['label']
-        ):
-            full_question = f"{context}\n{question}\nA. {answerA}\nB. {answerB}\nC. {answerC}"
-            # Convert label '1', '2', '3' to 'A', 'B', 'C'
-            answer = chr(ord('A') + int(label) - 1)
-            prompts.append(SocialIQAConfig._build_text_prompt(full_question))
-            completions.append(f" {answer}")
+        for question, choices, answer_key in zip(batch['question'], batch['choices'], batch['answerKey']):
+            full_question = f"{question}\n" + "\n".join([f"{label}. {text}" for label, text in zip(choices['label'], choices['text'])])
+            prompts.append(CommonsenseQAConfig._build_text_prompt(full_question))
+            completions.append(f" {answer_key}")
 
         return {'prompt': prompts, 'completion': completions}
     
     @classmethod
     def get_eval_config(cls):
         from eval.eval_configs import MultipleChoiceConfig
-        return MultipleChoiceConfig(choices=['A', 'B', 'C'])
+        return MultipleChoiceConfig(choices=['A', 'B', 'C', 'D', 'E'])
 
 
 @DatasetConfig.register('ChilleD/SVAMP')
@@ -551,44 +541,44 @@ class SVAMPConfig(DatasetConfig):
         return NumericConfig(tolerance=1e-1)
 
 
-@DatasetConfig.register('wics/strategy-qa', 'strategyQA')
-class StrategyQAConfig(DatasetConfig):
+# @DatasetConfig.register('wics/strategy-qa', 'strategyQA')
+# class StrategyQAConfig(DatasetConfig):
+# 
+    # system_message = "Answer the question with yes or no based on implicit reasoning and common knowledge"
+    # train_split = 'train'
+    # test_split = 'test'
 
-    system_message = "Answer the question with yes or no based on implicit reasoning and common knowledge"
-    train_split = 'train'
-    test_split = 'test'
-
-    @staticmethod
-    def chat_processor(batch: Dataset) -> ChatOutput:
+    # @staticmethod
+    # def chat_processor(batch: Dataset) -> ChatOutput:
         
-        prompts = []
-        completions = []
+    #     prompts = []
+    #     completions = []
 
-        for question, answer in zip(batch['question'], batch['answer']):
-            answer_text = 'yes' if answer else 'no'
-            prompt, completion = StrategyQAConfig._build_chat_prompt_completion(question, answer_text)
-            prompts.append(prompt)
-            completions.append(completion)
+    #     for question, answer in zip(batch['question'], batch['answer']):
+    #         answer_text = 'yes' if answer else 'no'
+    #         prompt, completion = StrategyQAConfig._build_chat_prompt_completion(question, answer_text)
+    #         prompts.append(prompt)
+    #         completions.append(completion)
 
-        return {'prompt': prompts, 'completion': completions}
+    #     return {'prompt': prompts, 'completion': completions}
     
-    @staticmethod
-    def non_chat_processor(batch: Dataset) -> NonChatOutput:
+    # @staticmethod
+    # def non_chat_processor(batch: Dataset) -> NonChatOutput:
         
-        prompts = []
-        completions = []
+    #     prompts = []
+    #     completions = []
 
-        for question, answer in zip(batch['question'], batch['answer']):
-            answer_text = 'yes' if answer else 'no'
-            prompts.append(StrategyQAConfig._build_text_prompt(question))
-            completions.append(f" {answer_text}")
+    #     for question, answer in zip(batch['question'], batch['answer']):
+    #         answer_text = 'yes' if answer else 'no'
+    #         prompts.append(StrategyQAConfig._build_text_prompt(question))
+    #         completions.append(f" {answer_text}")
 
-        return {'prompt': prompts, 'completion': completions}
+    #     return {'prompt': prompts, 'completion': completions}
     
-    @classmethod
-    def get_eval_config(cls):
-        from eval.eval_configs import BooleanConfig
-        return BooleanConfig(true_values=['yes', 'true', '1'], false_values=['no', 'false', '0'])
+    # @classmethod
+    # def get_eval_config(cls):
+    #     from eval.eval_configs import BooleanConfig
+    #     return BooleanConfig(true_values=['yes', 'true', '1'], false_values=['no', 'false', '0'])
 
 
 class RACEConfig(DatasetConfig):
