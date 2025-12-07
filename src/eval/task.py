@@ -100,20 +100,33 @@ class Task:
             if tokenizer.pad_token is None:
                 tokenizer.pad_token = tokenizer.eos_token
 
-            model_inputs = tokenizer(model_input_texts, return_tensors='pt', padding=True).to(model.device)
+            # Repeat each input num_pass times for parallel generation
+            if num_pass > 1:
+                model_input_texts_repeated = [text for text in model_input_texts for _ in range(num_pass)]
+            else:
+                model_input_texts_repeated = model_input_texts
+                
+            model_inputs = tokenizer(model_input_texts_repeated, return_tensors='pt', padding=True).to(model.device)
             
-            # Generate K predictions per sample
+            # Generate all predictions in parallel
+            model_outputs = model.generate(**model_inputs, max_new_tokens=max_new_tokens, temperature=temperature, do_sample=True)
+            
+            # Decode all predictions
+            all_preds = []
+            for i, output in enumerate(model_outputs):
+                generated_ids = output[len(model_inputs['input_ids'][i]):]
+                y_pred = tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
+                all_preds.append(y_pred)
+            
+            # Group predictions by sample
             preds_batch = []
             for i in range(len(model_input_texts)):
-                sample_preds = []
-                for _ in range(num_pass):
-                    single_input = {k: v[i:i+1] for k, v in model_inputs.items()}
-                    model_output = model.generate(**single_input, max_new_tokens=max_new_tokens, temperature=temperature, do_sample=True)
-                    generated_ids = model_output[0, len(single_input['input_ids'][0]):]
-                    y_pred = tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
-                    sample_preds.append(y_pred)
-                # Store as single string if K=1, else as list
-                preds_batch.append(sample_preds[0] if num_pass == 1 else sample_preds)
+                if num_pass == 1:
+                    preds_batch.append(all_preds[i])
+                else:
+                    start_idx = i * num_pass
+                    end_idx = start_idx + num_pass
+                    preds_batch.append(all_preds[start_idx:end_idx])
 
             inputs.extend(batch['X'])
             refs.extend(y)
