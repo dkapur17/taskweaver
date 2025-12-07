@@ -36,7 +36,7 @@ shift  # Remove first argument
 # Default parameters
 DATASETS_ARG="all"
 SPLIT="test"
-DEVICE="auto"
+DEVICE="cuda"
 BATCH_SIZE=32
 MAX_TOKENS=256
 TEMPERATURE=0.7

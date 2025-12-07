@@ -83,7 +83,7 @@ def get_lora_model_and_tokenizer(lora_adapter_path: str, device: str) -> Tuple[A
 def get_hypernet_and_tokenizer(hypernet_path: str, device: str) -> Tuple[TaskWeaver, AutoTokenizer]:
     # Load TaskWeaver hypernetwork from checkpoint
     # device_map parameter is not supported by TaskWeaver.from_pretrained, so we use device directly
-    taskweaver = TaskWeaver.from_pretrained(hypernet_path, device=device if device != 'auto' else None)
+    taskweaver = TaskWeaver.from_pretrained(hypernet_path, device=device)
     
     # Load config to get base model name for tokenizer
     config_path = os.path.join(hypernet_path, 'config.json')
@@ -146,7 +146,7 @@ def parse_args() -> Namespace:
     parser.add_argument('--datasets', type=str, nargs='+', default=['all'], help="Dataset to evaluate on")
     parser.add_argument('--ignore_datasets', type=str, nargs='+', default=[''], help='Datasets to ignore')
     parser.add_argument('--split', type=str, default='test', help="Split to evaluate on")
-    parser.add_argument('--device', type=str, default='auto', help='Device to run evals on')
+    parser.add_argument('--device', type=str, default='cuda', help='Device to run evals on')
     parser.add_class_arguments(EvaluatorConfig, 'evaluator', help="Evaluator configuration")
     parser.add_argument('--output_dir', type=str, default='_results', help="Directory to save evaluation outputs")
     parser.add_argument('--no_save', action='store_true', help="Disable automatic saving of results")
