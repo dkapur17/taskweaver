@@ -144,7 +144,7 @@ def parse_args() -> Namespace:
     parser.add_argument('--model_path', type=str, required=True, help="Path to the model to evaluate")
     parser.add_argument('--model_type', type=Literal['base', 'lora', 'hypernet'], required=True, help="Model type")
     parser.add_argument('--datasets', type=str, nargs='+', default=['all'], help="Dataset to evaluate on")
-    parser.add_argument('--ignore_datasets', type=str, nargs='+', default=[], help='Datasets to ignore')
+    parser.add_argument('--ignore_datasets', type=str, nargs='+', default=[''], help='Datasets to ignore')
     parser.add_argument('--split', type=str, default='test', help="Split to evaluate on")
     parser.add_argument('--device', type=str, default='auto', help='Device to run evals on')
     parser.add_class_arguments(EvaluatorConfig, 'evaluator', help="Evaluator configuration")
@@ -163,6 +163,10 @@ if __name__ == "__main__":
     start_datetime = datetime.now()
 
     model, tokenizer = get_model_and_tokenizer(args.model_path, args.model_type, args.device)
+    args.datasets = [dataset for dataset in args.datasets[0].split(" ")]
+    args.ignore_datasets = [dataset for dataset in args.ignore_datasets[0].split(" ")]
+    print("Running: ", args.datasets)
+    print("Ignoring: ",  args.ignore_datasets)
     dataset_configs = get_dataset_configs(args.datasets, args.ignore_datasets)
 
     is_chat = tokenizer.chat_template is not None
