@@ -8,11 +8,12 @@ class EvaluationResult:
     eval_type: str
     metrics: Optional[Dict[str, Union[int, float]]]
     inputs: List[Any]       # Input prompts or messages
-    predictions: List[str]  # Raw predictions
+    predictions: List[Union[str, List[str]]]  # Raw predictions (str for K=1, List[str] for K>1)
     references: List[str]   # Raw references
     parsed_predictions: Optional[List[Any]]  # Parsed predictions
     parsed_references: Optional[List[Any]]   # Parsed references
     num_samples: int
+    num_pass: int = 1  # K value for pass@K
     
     def __repr__(self):
         metric_str = ", ".join([f"{k}={v:.4f}" if isinstance(v, float) else f"{k}={v}" 
@@ -36,24 +37,79 @@ class EvaluationConfig(ABC):
         pass
     
     @abstractmethod
-    def compute_metrics(self, predictions: List[Any], references: List[Any]) -> Dict[str, Union[int, float]]:
-        """Compute metrics given parsed predictions and references"""
+    def is_correct(self, prediction: Any, reference: Any) -> bool:
+        """Check if a single prediction matches the reference"""
         pass
     
-    def __call__(self, inputs: List[Any], predictions: List[str], references: List[str]) -> EvaluationResult:
+    def compute_metrics(self, predictions: List[Any], references: List[Any]) -> Dict[str, Union[int, float]]:
+        """Compute metrics given parsed predictions and references (shared logic)"""
+        total = len(predictions)
+        
+        # Normalize to list format (K=1 becomes list of lists with single element)
+        if predictions and not isinstance(predictions[0], list):
+            predictions = [[p] for p in predictions]
+        
+        K = len(predictions[0]) if predictions else 1
+        
+        # Track at which k each sample first passes (0 means never passes)
+        first_pass_at = []
+        for p_list, r in zip(predictions, references):
+            passed_at = 0
+            for k, p in enumerate(p_list, 1):
+                if p is not None and self.is_correct(p, r):
+                    passed_at = k
+                    break
+            first_pass_at.append(passed_at)
+        
+        # Compute pass@k metrics from first_pass_at
+        metrics = {}
+        for k in range(1, K + 1):
+            pass_at_k = sum(1 for passed_at in first_pass_at if 0 < passed_at <= k)
+            metrics[f'pass_at_{k}_accuracy'] = pass_at_k / total if total > 0 else 0.0
+            metrics[f'pass_at_{k}_correct'] = pass_at_k
+        
+        # Add answered rate for first attempt
+        first_answered = sum(1 for p_list, _ in zip(predictions, references) if p_list[0] is not None)
+        metrics['pass_at_1_answered_rate'] = first_answered / total if total > 0 else 0.0
+        
+        # For K=1, also add backward compatible keys
+        if K == 1:
+            metrics['accuracy'] = metrics['pass_at_1_accuracy']
+            metrics['answered_rate'] = metrics['pass_at_1_answered_rate']
+            metrics['correct'] = metrics['pass_at_1_correct']
+            metrics['answered'] = first_answered
+        
+        metrics['total'] = total
+        metrics['num_pass'] = K
+        return metrics
+    
+    def __call__(self, inputs: List[Any], predictions: List[Union[str, List[str]]], references: List[str]) -> EvaluationResult:
         """
         Main evaluation method
         
         Args:
             inputs: List of input prompts or messages
-            predictions: List of raw prediction strings
+            predictions: List of raw prediction strings (or lists of strings for K>1)
             references: List of raw reference strings
             
         Returns:
             EvaluationResult with metrics and parsed values
         """
+        # Determine if this is K-pass evaluation
+        num_pass = 1
+        print("predictions:", predictions)
+        if predictions and isinstance(predictions[0], list):
+            num_pass = len(predictions[0])
+        
         # Parse predictions and references
-        parsed_predictions = [self.parse_prediction(p) for p in predictions]
+        if num_pass == 1:
+            # Single generation: predictions is List[str]
+            parsed_predictions = [self.parse_prediction(p) for p in predictions]
+        else:
+            # K generations: predictions is List[List[str]]
+            # Parse all K predictions for each sample
+            parsed_predictions = [[self.parse_prediction(pred) for pred in p_list] for p_list in predictions]
+        
         parsed_references = [self.parse_reference(r) for r in references]
         
         # Compute metrics
@@ -70,7 +126,8 @@ class EvaluationConfig(ABC):
             references=references,
             parsed_predictions=parsed_predictions,
             parsed_references=parsed_references,
-            num_samples=len(predictions)
+            num_samples=len(predictions),
+            num_pass=num_pass
         )
 
 
@@ -99,16 +156,8 @@ class ExactMatchConfig(EvaluationConfig):
             ref = ref.lower()
         return ref
     
-    def compute_metrics(self, predictions: List[str], references: List[str]) -> Dict[str, Union[int, float]]:
-        correct = sum(p == r for p, r in zip(predictions, references))
-        total = len(predictions)
-        
-        return {
-            'accuracy': correct / total if total > 0 else 0.0,
-            'exact_match': correct / total if total > 0 else 0.0,
-            'correct': correct,
-            'total': total
-        }
+    def is_correct(self, prediction: str, reference: str) -> bool:
+        return prediction == reference
 
 
 class MultipleChoiceConfig(EvaluationConfig):
@@ -139,18 +188,8 @@ class MultipleChoiceConfig(EvaluationConfig):
         """Reference should already be a letter"""
         return ref.strip().upper()
     
-    def compute_metrics(self, predictions: List[Optional[str]], references: List[str]) -> Dict[str, Union[int, float]]:
-        correct = sum(p == r for p, r in zip(predictions, references) if p is not None)
-        answered = sum(p is not None for p in predictions)
-        total = len(predictions)
-        
-        return {
-            'accuracy': correct / total if total > 0 else 0.0,
-            'answered_rate': answered / total if total > 0 else 0.0,
-            'correct': correct,
-            'answered': answered,
-            'total': total
-        }
+    def is_correct(self, prediction: Optional[str], reference: str) -> bool:
+        return prediction == reference
 
 
 class NumericConfig(EvaluationConfig):
@@ -195,25 +234,10 @@ class NumericConfig(EvaluationConfig):
             ref = ref.split('####')[-1].strip()
         return float(ref.replace(',', ''))
     
-    def compute_metrics(self, predictions: List[Optional[float]], references: List[float]) -> Dict[str, Union[int, float]]:
-        correct = 0
-        answered = 0
-        
-        for pred, ref in zip(predictions, references):
-            if pred is not None:
-                answered += 1
-                if abs(pred - ref) <= self.tolerance:
-                    correct += 1
-        
-        total = len(predictions)
-        
-        return {
-            'accuracy': correct / total if total > 0 else 0.0,
-            'answered_rate': answered / total if total > 0 else 0.0,
-            'correct': correct,
-            'answered': answered,
-            'total': total
-        }
+    def is_correct(self, prediction: Optional[float], reference: float) -> bool:
+        if prediction is None:
+            return False
+        return abs(prediction - reference) <= self.tolerance
 
 
 class BooleanConfig(EvaluationConfig):
@@ -259,18 +283,8 @@ class BooleanConfig(EvaluationConfig):
         
         raise ValueError(f"Cannot parse reference as boolean: {ref}")
     
-    def compute_metrics(self, predictions: List[Optional[bool]], references: List[bool]) -> Dict[str, Union[int, float]]:
-        correct = sum(p == r for p, r in zip(predictions, references) if p is not None)
-        answered = sum(p is not None for p in predictions)
-        total = len(predictions)
-        
-        return {
-            'accuracy': correct / total if total > 0 else 0.0,
-            'answered_rate': answered / total if total > 0 else 0.0,
-            'correct': correct,
-            'answered': answered,
-            'total': total
-        }
+    def is_correct(self, prediction: Optional[bool], reference: bool) -> bool:
+        return prediction == reference
 
 
 class CustomConfig(EvaluationConfig):

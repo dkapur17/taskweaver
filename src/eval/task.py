@@ -73,7 +73,7 @@ class Task:
         
         self.dataset = self.dataset.map(build_messages, batched=True, remove_columns=self.dataset.column_names)
 
-    def _get_preds_and_refs(self, model, tokenizer, batch_size:int=64, max_new_tokens:int=32768, temperature:float=1.0, progress:bool=False) -> Tuple[List, List[str], List[str]]:
+    def _get_preds_and_refs(self, model, tokenizer, batch_size:int=64, max_new_tokens:int=32768, temperature:float=1.0, num_pass:int=1, progress:bool=False) -> Tuple[List, List[str], List[str]]:
         if progress:
             pbar = tqdm(self.dataset.iter(batch_size), total=self.dataset.num_rows//batch_size + 1)
         else:
@@ -102,27 +102,27 @@ class Task:
 
             model_inputs = tokenizer(model_input_texts, return_tensors='pt', padding=True).to(model.device)
             
-            model_outputs = model.generate(**model_inputs, max_new_tokens=max_new_tokens, temperature=temperature, do_sample=True)
-            
+            # Generate K predictions per sample
             preds_batch = []
-            for i, output in enumerate(model_outputs):
-                generated_ids = output[len(model_inputs.input_ids[i]):]
-                y_pred = tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
-                preds_batch.append(y_pred)
+            for i in range(len(model_input_texts)):
+                sample_preds = []
+                for _ in range(num_pass):
+                    single_input = {k: v[i:i+1] for k, v in model_inputs.items()}
+                    model_output = model.generate(**single_input, max_new_tokens=max_new_tokens, temperature=temperature, do_sample=True)
+                    generated_ids = model_output[0, len(single_input['input_ids'][0]):]
+                    y_pred = tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
+                    sample_preds.append(y_pred)
+                # Store as single string if K=1, else as list
+                preds_batch.append(sample_preds[0] if num_pass == 1 else sample_preds)
 
             inputs.extend(batch['X'])
             refs.extend(y)
             preds.extend(preds_batch)
 
-            # print("\nInputs: ", model_input_texts)
-            # print("\nReferences: ", refs)
-            # print("\nPredictions: ", preds)
-
         return inputs, preds, refs
 
-    def evaluate(self, model, tokenizer, batch_size:int=64, max_new_tokens:int=32768, temperature:float=1.0, progress:bool=False) -> EvaluationResult:
-        
-        inputs, preds, refs = self._get_preds_and_refs(model, tokenizer, batch_size, max_new_tokens, temperature, progress)
+    def evaluate(self, model, tokenizer, batch_size:int=64, max_new_tokens:int=32768, temperature:float=1.0, num_pass:int=1, progress:bool=False) -> EvaluationResult:
+        inputs, preds, refs = self._get_preds_and_refs(model, tokenizer, batch_size, max_new_tokens, temperature, num_pass, progress)
 
         if self.eval_config:
             return self.eval_config(inputs, preds, refs)

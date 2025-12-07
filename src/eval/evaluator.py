@@ -45,6 +45,7 @@ class Evaluator:
         batch_size: int = 16,
         max_new_tokens: int = 128,
         temperature: float = 1.0,
+        num_pass: int = 1,
         progress: bool = True,
         task_specific_kwargs: Optional[Dict[str, dict]] = None
     ) -> Dict[str, EvaluationResult]:
@@ -57,6 +58,7 @@ class Evaluator:
             batch_size: Default batch size for all tasks
             max_new_tokens: Default max new tokens for all tasks
             temperature: Default temperature for generation (0.0=deterministic, 1.0=standard)
+            num_pass: Number of generations per sample (K for pass@K evaluation)
             progress: Show progress bars during evaluation
             task_specific_kwargs: Dict mapping task names to specific kwargs
                 Example: {'GSM8K': {'max_new_tokens': 512, 'temperature': 0.7}}
@@ -82,7 +84,8 @@ class Evaluator:
                 'batch_size': batch_size,
                 'max_new_tokens': max_new_tokens,
                 'temperature': temperature,
-                'progress': progress
+                'progress': progress,
+                'num_pass': num_pass
             }
             if task.task_name in task_specific_kwargs:
                 kwargs.update(task_specific_kwargs[task.task_name])
@@ -217,10 +220,18 @@ class Evaluator:
             for i in range(result.num_samples):
                 # Compute correctness for this sample
                 is_correct = None
+                pass_at_k_correct = None
+                
                 if result.parsed_predictions and result.parsed_references:
                     parsed_pred = result.parsed_predictions[i]
                     parsed_ref = result.parsed_references[i]
-                    is_correct = (parsed_pred == parsed_ref)
+                    
+                    if result.num_pass > 1:
+                        # K-pass: check if any prediction is correct
+                        pass_at_k_correct = any(p == parsed_ref for p in parsed_pred)
+                        is_correct = (parsed_pred[0] == parsed_ref)  # First attempt
+                    else:
+                        is_correct = (parsed_pred == parsed_ref)
                 
                 sample = {
                     'input': result.inputs[i],
@@ -230,6 +241,12 @@ class Evaluator:
                     'parsed_reference': str(result.parsed_references[i]) if result.parsed_references else None,
                     'correct': is_correct,
                 }
+                
+                # Add pass@K specific fields
+                if result.num_pass > 1:
+                    sample['pass_at_k_correct'] = pass_at_k_correct
+                    sample['num_pass'] = result.num_pass
+                
                 samples.append(sample)
             
             result_dict = {

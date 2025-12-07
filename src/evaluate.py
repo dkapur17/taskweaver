@@ -1,4 +1,5 @@
 import os
+import sys
 import torch
 import json
 from jsonargparse import ArgumentParser, Namespace
@@ -90,6 +91,7 @@ class EvaluatorConfig:
     batch_size: int = 8
     max_new_tokens: int = 256
     temperature: float = 0.7
+    num_pass: int = 1
 
 
 def parse_args() -> Namespace:
@@ -108,6 +110,9 @@ def parse_args() -> Namespace:
 if __name__ == "__main__":
     args = parse_args()
 
+    # Capture the command that was run
+    command = ' '.join(sys.argv)
+
     model, tokenizer = get_model_and_tokenizer(args.model_path, args.model_type, args.device)
     dataset_configs = get_dataset_configs(args.datasets, args.ignore_datasets)
 
@@ -121,7 +126,8 @@ if __name__ == "__main__":
         progress=True,
         batch_size=args.evaluator.batch_size,
         max_new_tokens=args.evaluator.max_new_tokens,
-        temperature=args.evaluator.temperature
+        temperature=args.evaluator.temperature,
+        num_pass=args.evaluator.num_pass
     )
 
     # Save results by default
@@ -135,6 +141,7 @@ if __name__ == "__main__":
         
         # Prepare metadata
         metadata = {
+            'command': command,
             'model_path': args.model_path,
             'model_type': args.model_type,
             'datasets': args.datasets,
@@ -142,6 +149,7 @@ if __name__ == "__main__":
             'batch_size': args.evaluator.batch_size,
             'max_new_tokens': args.evaluator.max_new_tokens,
             'temperature': args.evaluator.temperature,
+            'num_pass': args.evaluator.num_pass,
             'is_chat': is_chat,
             'timestamp': timestamp
         }

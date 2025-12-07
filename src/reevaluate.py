@@ -89,6 +89,11 @@ def reevaluate(
         predictions = [s['prediction'] for s in samples]
         references = [s['reference'] for s in samples]
         
+        # Detect K-pass evaluation
+        num_pass = task_data.get('metrics', {}).get('num_pass', 1)
+        if verbose and num_pass > 1:
+            print(f"  (K-pass evaluation detected: K={num_pass})")
+        
         # Get eval config
         try:
             eval_config = get_eval_config_for_task(task_name, **eval_kwargs)
