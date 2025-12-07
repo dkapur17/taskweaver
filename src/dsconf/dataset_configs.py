@@ -224,8 +224,6 @@ class GSM8KConfig(DatasetConfig):
 
         prompts = []
         completions = []
-        print("QTN: ", batch['question'])
-        print("ANS: ", batch['answer'])
 
         for question, answer in zip(batch['question'], batch['answer']):
             prompt, completion = GSM8KConfig._build_chat_prompt_completion(question, answer)
@@ -239,8 +237,6 @@ class GSM8KConfig(DatasetConfig):
 
         prompts = []
         completions = []
-        print("QTN: ", batch['question'])
-        print("ANS: ", batch['answer'])
 
         for question, answer in zip(batch['question'], batch['answer']):
             prompts.append(GSM8KConfig._build_text_prompt(question))
@@ -563,13 +559,6 @@ class DatasetMixer(DatasetConfig):
         valid_configs = []
         
         for config in self._dataset_configs:
-            # if split == 'train':
-            #     actual_split = config.train_split or 'train'
-            # elif split == 'test':
-            #     actual_split = config.test_split or 'test'
-            # else:
-            #     actual_split = split
-            
             try:
                 processed = config.load_and_process(is_chat=is_chat, split=split)
                 processed_datasets.append(processed)
