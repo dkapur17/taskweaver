@@ -78,10 +78,13 @@ class DatasetConfig(ABC):
     def load_and_process(cls, is_chat: bool, split: str = 'train', enable_thinking: Optional[bool] = None) -> Dataset:
         """Load the HF dataset and process it."""
 
-        if 'train' in split:
+        # Resolve split
+        if split.startswith('train'):
             split = split.replace('train', cls.train_split)
-        elif 'test' in split:
+        elif split.startswith('test'):
             split = split.replace('test', cls.test_split)
+        else:
+            raise AssertionError(f'Only train and test splits supported, got {split}')
 
         dataset = load_dataset(cls.dataset_path, cls.dataset_name, split=split)
         processor = cls.get_processor(is_chat)
@@ -130,16 +133,16 @@ class DatasetConfig(ABC):
         ...
     
     @classmethod
-    def create_task(cls, split: str, is_chat: bool):
+    def create_task(cls, is_chat: bool, split: str = 'test'):
         """Create an evaluation Task for this dataset."""
         from eval.task import Task
-        
+
         # Load and process dataset
         processed_data = cls.load_and_process(is_chat=is_chat, split=split)
         eval_format = cls.to_eval_format(processed_data, is_chat=is_chat)
         
         # Create dataset with X, y columns
-        dataset = Dataset.from_dict(**eval_format)
+        dataset = Dataset.from_dict(eval_format)
         
         # Get eval config
         eval_config = cls.get_eval_config()
