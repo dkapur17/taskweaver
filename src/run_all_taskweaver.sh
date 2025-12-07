@@ -21,7 +21,7 @@ NC='\033[0m' # No Color
 # Check arguments
 if [ $# -lt 1 ]; then
     echo -e "${RED}Error: Missing required argument${NC}"
-    echo "Usage: $0 <hypernet_model_path> [--datasets DATASETS] [--split SPLIT] [--device DEVICE] [--batch_size SIZE] [--max_tokens TOKENS]"
+    echo "Usage: $0 <hypernet_model_path> [--datasets DATASETS] [--split SPLIT] [--device DEVICE] [--batch_size SIZE] [--max_tokens TOKENS] [--num_pass K]"
     echo ""
     echo "Example:"
     echo "  $0 _models/hypernet/EleutherAI_pythia-70m/mix_8_datasets"
@@ -40,6 +40,7 @@ DEVICE="auto"
 BATCH_SIZE=8
 MAX_TOKENS=256
 TEMPERATURE=0.7
+NUM_PASS=3
 
 # Parse optional arguments
 while [[ $# -gt 0 ]]; do
@@ -66,6 +67,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --temperature)
             TEMPERATURE="$2"
+            shift 2
+            ;;
+        --num_pass)
+            NUM_PASS="$2"
             shift 2
             ;;
         *)
@@ -100,6 +105,7 @@ echo -e "Device: ${GREEN}$DEVICE${NC}"
 echo -e "Batch size: ${GREEN}$BATCH_SIZE${NC}"
 echo -e "Max tokens: ${GREEN}$MAX_TOKENS${NC}"
 echo -e "Temperature: ${GREEN}$TEMPERATURE${NC}"
+echo -e "Num generations: ${GREEN}$NUM_PASS${NC}"
 echo ""
 
 # Display GPU information
@@ -123,7 +129,8 @@ python evaluate.py \
     --device "$DEVICE" \
     --evaluator.batch_size "$BATCH_SIZE" \
     --evaluator.max_new_tokens "$MAX_TOKENS" \
-    --evaluator.temperature "$TEMPERATURE"
+    --evaluator.temperature "$TEMPERATURE" \
+    --evaluator.num_pass "$NUM_PASS"
 
 exit_code=$?
 
