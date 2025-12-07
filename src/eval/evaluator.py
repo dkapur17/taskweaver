@@ -195,12 +195,13 @@ class Evaluator:
             timestamp=datetime.now().isoformat()
         )
     
-    def save_results(self, filepath: Union[str, Path]) -> None:
+    def save_results(self, filepath: Union[str, Path], metadata: Optional[Dict[str, Any]] = None) -> None:
         """
         Save evaluation results with full I/O data to JSON file
         
         Args:
             filepath: Path to save results
+            metadata: Optional metadata dict to include in output
         """
         if not self.results:
             raise ValueError("No results available. Run evaluate() first.")
@@ -214,12 +215,20 @@ class Evaluator:
             # Group each sample's data together
             samples = []
             for i in range(result.num_samples):
+                # Compute correctness for this sample
+                is_correct = None
+                if result.parsed_predictions and result.parsed_references:
+                    parsed_pred = result.parsed_predictions[i]
+                    parsed_ref = result.parsed_references[i]
+                    is_correct = (parsed_pred == parsed_ref)
+                
                 sample = {
                     'input': result.inputs[i],
                     'prediction': result.predictions[i],
                     'reference': result.references[i],
                     'parsed_prediction': str(result.parsed_predictions[i]) if result.parsed_predictions else None,
                     'parsed_reference': str(result.parsed_references[i]) if result.parsed_references else None,
+                    'correct': is_correct,
                 }
                 samples.append(sample)
             
@@ -235,6 +244,7 @@ class Evaluator:
         # Add summary
         summary = self.get_summary()
         output = {
+            'metadata': metadata or {},
             'summary': asdict(summary),
             'results': serializable_results
         }

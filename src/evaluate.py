@@ -101,7 +101,8 @@ def parse_args() -> Namespace:
     parser.add_argument('--split', type=str, default='test', help="Split to evaluate on")
     parser.add_argument('--device', type=str, default='auto', help='Device to run evals on')
     parser.add_class_arguments(EvaluatorConfig, 'evaluator', help="Evaluator configuration")
-    parser.add_argument('--output_dir', type=str, help="Location to write evaluation output to")
+    parser.add_argument('--output_dir', type=str, default='_results', help="Directory to save evaluation outputs")
+    parser.add_argument('--no_save', action='store_true', help="Disable automatic saving of results")
     return parser.parse_args()
 
 if __name__ == "__main__":
@@ -123,4 +124,27 @@ if __name__ == "__main__":
         temperature=args.evaluator.temperature
     )
 
-    print(json.dumps(asdict(results['allenai/ai2_arc.ARC-Easy'])))
+    # Save results by default
+    if not args.no_save:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        model_name = Path(args.model_path).name.replace('/', '-')
+        output_dir = Path(args.output_dir) / f"{model_name}_{args.model_type}"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        output_file = output_dir / f"eval_{timestamp}.json"
+        
+        # Prepare metadata
+        metadata = {
+            'model_path': args.model_path,
+            'model_type': args.model_type,
+            'datasets': args.datasets,
+            'split': args.split,
+            'batch_size': args.evaluator.batch_size,
+            'max_new_tokens': args.evaluator.max_new_tokens,
+            'temperature': args.evaluator.temperature,
+            'is_chat': is_chat,
+            'timestamp': timestamp
+        }
+        
+        evaluator.save_results(output_file, metadata=metadata)
+        print(f"\n✓ Results saved to: {output_file}")
