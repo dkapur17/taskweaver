@@ -15,14 +15,18 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Start timing
+SCRIPT_START_TIME=$(date +%s)
+
 # Check arguments
 if [ $# -lt 1 ]; then
     echo -e "${RED}Error: Missing required argument${NC}"
-    echo "Usage: $0 <lora_models_directory> [--split SPLIT] [--device DEVICE] [--batch_size SIZE] [--max_tokens TOKENS]"
+    echo "Usage: $0 <lora_models_directory> [--split SPLIT] [--device DEVICE] [--batch_size SIZE] [--max_tokens TOKENS] [--num_pass K]"
     echo ""
     echo "Example:"
     echo "  $0 _models/lora/EleutherAI_pythia-70m"
     echo "  $0 _models/lora/EleutherAI_pythia-70m --split test[:100] --device cuda:0"
+    echo "  $0 _models/lora/EleutherAI_pythia-70m --num_pass 5"
     exit 1
 fi
 
@@ -31,10 +35,11 @@ shift  # Remove first argument
 
 # Default parameters
 SPLIT="test"
-DEVICE="auto"
-BATCH_SIZE=8
+DEVICE="cuda"
+BATCH_SIZE=4
 MAX_TOKENS=256
 TEMPERATURE=0.7
+NUM_PASS=2
 
 # Parse optional arguments
 while [[ $# -gt 0 ]]; do
@@ -57,6 +62,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --temperature)
             TEMPERATURE="$2"
+            shift 2
+            ;;
+        --num_pass)
+            NUM_PASS="$2"
             shift 2
             ;;
         *)
@@ -84,6 +93,7 @@ echo -e "Device: ${GREEN}$DEVICE${NC}"
 echo -e "Batch size: ${GREEN}$BATCH_SIZE${NC}"
 echo -e "Max tokens: ${GREEN}$MAX_TOKENS${NC}"
 echo -e "Temperature: ${GREEN}$TEMPERATURE${NC}"
+echo -e "Num generations: ${GREEN}$NUM_PASS${NC}"
 echo ""
 
 # Map directory names to dataset names for evaluate.py
@@ -143,6 +153,15 @@ declare -a results_summary
 echo -e "${BLUE}Found $total_models LoRA models to evaluate${NC}"
 echo ""
 
+# Display GPU information
+if command -v nvidia-smi &> /dev/null; then
+    echo -e "${BLUE}GPU Information:${NC}"
+    nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader | while read line; do
+        echo -e "  ${GREEN}$line${NC}"
+    done
+    echo ""
+fi
+
 # Iterate through each subdirectory (each represents a dataset-specific LoRA model)
 for model_path in "$LORA_DIR"/*/ ; do
     # Remove trailing slash
@@ -176,6 +195,7 @@ for model_path in "$LORA_DIR"/*/ ; do
         --evaluator.batch_size "$BATCH_SIZE" \
         --evaluator.max_new_tokens "$MAX_TOKENS" \
         --evaluator.temperature "$TEMPERATURE" \
+        --evaluator.num_pass "$NUM_PASS" \
         2>&1 | tee /tmp/eval_${dataset_dir}.log)
     
     exit_code=$?
@@ -184,13 +204,12 @@ for model_path in "$LORA_DIR"/*/ ; do
         echo -e "${GREEN}✓ Successfully evaluated $dataset_dir${NC}"
         success=$((success + 1))
         
-        # Extract accuracy from output (look for pattern like "24.88%")
-        accuracy=$(echo "$eval_output" | grep -oP '(?<=\s)\d+\.\d+%' | head -1)
-        samples=$(echo "$eval_output" | grep -oP '\d+(?=\s*$)' | tail -1)
+        # Extract the entire summary line for this dataset
+        summary_line=$(echo "$eval_output" | grep -E "^$dataset_name\s+" | head -1)
         
-        # Store result for summary
-        if [ -n "$accuracy" ]; then
-            results_summary+=("$dataset_name|$accuracy|$samples")
+        if [ -n "$summary_line" ]; then
+            # Store the entire line for the summary table
+            results_summary+=("$summary_line")
         fi
     else
         echo -e "${RED}✗ Failed to evaluate $dataset_dir${NC}"
@@ -201,6 +220,13 @@ for model_path in "$LORA_DIR"/*/ ; do
     echo ""
 done
 
+# Calculate elapsed time
+SCRIPT_END_TIME=$(date +%s)
+ELAPSED_TIME=$((SCRIPT_END_TIME - SCRIPT_START_TIME))
+ELAPSED_HOURS=$((ELAPSED_TIME / 3600))
+ELAPSED_MINUTES=$(((ELAPSED_TIME % 3600) / 60))
+ELAPSED_SECONDS=$((ELAPSED_TIME % 60))
+
 # Print summary
 echo -e "${BLUE}========================================"
 echo "Evaluation Complete"
@@ -208,6 +234,7 @@ echo "========================================${NC}"
 echo -e "Total models: ${BLUE}$total_models${NC}"
 echo -e "Successful: ${GREEN}$success${NC}"
 echo -e "Failed: ${RED}$failed${NC}"
+echo -e "Total time: ${BLUE}${ELAPSED_HOURS}h ${ELAPSED_MINUTES}m ${ELAPSED_SECONDS}s${NC}"
 echo ""
 
 if [ $success -gt 0 ]; then
@@ -217,14 +244,15 @@ if [ $success -gt 0 ]; then
     # Print results summary table
     if [ ${#results_summary[@]} -gt 0 ]; then
         echo -e "${BLUE}========================================"
-        echo "Results Summary"
+        if [ "$NUM_PASS" -gt 1 ]; then
+            echo "Results Summary (Pass@$NUM_PASS)"
+        else
+            echo "Results Summary"
+        fi
         echo "========================================${NC}"
-        printf "%-40s %-15s %-10s\n" "Dataset" "Accuracy" "Samples"
-        echo "=========================================================================================="
         
         for result in "${results_summary[@]}"; do
-            IFS='|' read -r dataset accuracy samples <<< "$result"
-            printf "%-40s %-15s %-10s\n" "$dataset" "$accuracy" "$samples"
+            echo "$result"
         done
         echo ""
     fi

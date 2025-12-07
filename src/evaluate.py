@@ -2,6 +2,8 @@ import os
 import sys
 import torch
 import json
+import subprocess
+import time
 from jsonargparse import ArgumentParser, Namespace
 from pathlib import Path
 from datetime import datetime
@@ -16,6 +18,49 @@ from dataclasses import dataclass, asdict
 from dotenv import load_dotenv
 
 load_dotenv('../.env')
+
+
+def get_gpu_info() -> Dict[str, Any]:
+    """Capture NVIDIA GPU information using nvidia-smi"""
+    gpu_info = {}
+    try:
+        # Get GPU name
+        result = subprocess.run(
+            ['nvidia-smi', '--query-gpu=name', '--format=csv,noheader'],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            gpu_info['gpu_name'] = result.stdout.strip().split('\n')
+        
+        # Get GPU memory
+        result = subprocess.run(
+            ['nvidia-smi', '--query-gpu=memory.total', '--format=csv,noheader'],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            gpu_info['gpu_memory'] = result.stdout.strip().split('\n')
+        
+        # Get driver version
+        result = subprocess.run(
+            ['nvidia-smi', '--query-gpu=driver_version', '--format=csv,noheader'],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            gpu_info['driver_version'] = result.stdout.strip().split('\n')[0]
+        
+        # Get CUDA version
+        result = subprocess.run(
+            ['nvidia-smi'], capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            for line in result.stdout.split('\n'):
+                if 'CUDA Version' in line:
+                    gpu_info['cuda_version'] = line.split('CUDA Version:')[1].split()[0]
+                    break
+    except Exception as e:
+        gpu_info['error'] = str(e)
+    
+    return gpu_info
 
 
 def get_base_model_and_tokenizer(model_path: str, device: str) -> Tuple[AutoModelForCausalLM, AutoTokenizer]:
@@ -112,6 +157,10 @@ if __name__ == "__main__":
 
     # Capture the command that was run
     command = ' '.join(sys.argv)
+    
+    # Start timing
+    start_time = time.time()
+    start_datetime = datetime.now()
 
     model, tokenizer = get_model_and_tokenizer(args.model_path, args.model_type, args.device)
     dataset_configs = get_dataset_configs(args.datasets, args.ignore_datasets)
@@ -132,12 +181,20 @@ if __name__ == "__main__":
 
     # Save results by default
     if not args.no_save:
+        # End timing
+        end_time = time.time()
+        end_datetime = datetime.now()
+        duration_seconds = end_time - start_time
+        
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         model_name = Path(args.model_path).name.replace('/', '-')
         output_dir = Path(args.output_dir) / f"{model_name}_{args.model_type}"
         output_dir.mkdir(parents=True, exist_ok=True)
         
         output_file = output_dir / f"eval_{timestamp}.json"
+        
+        # Capture GPU info
+        gpu_info = get_gpu_info()
         
         # Prepare metadata
         metadata = {
@@ -151,7 +208,14 @@ if __name__ == "__main__":
             'temperature': args.evaluator.temperature,
             'num_pass': args.evaluator.num_pass,
             'is_chat': is_chat,
-            'timestamp': timestamp
+            'timestamp': timestamp,
+            'runtime': {
+                'start_time': start_datetime.isoformat(),
+                'end_time': end_datetime.isoformat(),
+                'duration_seconds': round(duration_seconds, 2),
+                'duration_formatted': f"{int(duration_seconds // 3600)}h {int((duration_seconds % 3600) // 60)}m {int(duration_seconds % 60)}s"
+            },
+            'gpu_info': gpu_info
         }
         
         evaluator.save_results(output_file, metadata=metadata)

@@ -8,6 +8,9 @@
 
 set -e  # Exit on error
 
+# Start timing
+SCRIPT_START_TIME=$(date +%s)
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -99,6 +102,15 @@ echo -e "Max tokens: ${GREEN}$MAX_TOKENS${NC}"
 echo -e "Temperature: ${GREEN}$TEMPERATURE${NC}"
 echo ""
 
+# Display GPU information
+if command -v nvidia-smi &> /dev/null; then
+    echo -e "${BLUE}GPU Information:${NC}"
+    nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader | while read line; do
+        echo -e "  ${GREEN}$line${NC}"
+    done
+    echo ""
+fi
+
 # Run evaluation
 echo -e "${BLUE}Running evaluation...${NC}"
 echo ""
@@ -115,15 +127,24 @@ python evaluate.py \
 
 exit_code=$?
 
+# Calculate elapsed time
+SCRIPT_END_TIME=$(date +%s)
+ELAPSED_TIME=$((SCRIPT_END_TIME - SCRIPT_START_TIME))
+ELAPSED_HOURS=$((ELAPSED_TIME / 3600))
+ELAPSED_MINUTES=$(((ELAPSED_TIME % 3600) / 60))
+ELAPSED_SECONDS=$((ELAPSED_TIME % 60))
+
 echo ""
 if [ $exit_code -eq 0 ]; then
     echo -e "${GREEN}========================================"
     echo "Evaluation Complete"
     echo "========================================${NC}"
     echo -e "${GREEN}Results saved to: _results/${MODEL_NAME}_hypernet/${NC}"
+    echo -e "Total time: ${BLUE}${ELAPSED_HOURS}h ${ELAPSED_MINUTES}m ${ELAPSED_SECONDS}s${NC}"
 else
     echo -e "${RED}========================================"
     echo "Evaluation Failed"
     echo "========================================${NC}"
+    echo -e "Total time: ${BLUE}${ELAPSED_HOURS}h ${ELAPSED_MINUTES}m ${ELAPSED_SECONDS}s${NC}"
     exit 1
 fi
