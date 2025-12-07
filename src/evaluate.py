@@ -35,7 +35,21 @@ def get_lora_model_and_tokenizer(lora_adapter_path: str, device: str) -> Tuple[A
     return lora_model, tokenizer
 
 def get_hypernet_and_tokenizer(hypernet_path: str, device: str) -> Tuple[TaskWeaver, AutoTokenizer]:
-    raise NotImplementedError("Hypernetwork loading not implemented")
+    # Load TaskWeaver hypernetwork from checkpoint
+    # device_map parameter is not supported by TaskWeaver.from_pretrained, so we use device directly
+    taskweaver = TaskWeaver.from_pretrained(hypernet_path, device=device if device != 'auto' else None)
+    
+    # Load config to get base model name for tokenizer
+    config_path = os.path.join(hypernet_path, 'config.json')
+    with open(config_path, 'r') as f:
+        config = json.load(f)
+    
+    base_model_name = config.get('model_name')
+    if not base_model_name:
+        raise ValueError(f"No model_name found in config at {config_path}")
+    
+    tokenizer = AutoTokenizer.from_pretrained(base_model_name, padding_side='left')
+    return taskweaver, tokenizer
 
 def get_model_and_tokenizer(path: str, model_type: Literal['base', 'lora', 'hypernet'], device: str) -> Tuple[Union[AutoModelForCausalLM, TaskWeaver], AutoTokenizer]:
     if model_type == 'base':

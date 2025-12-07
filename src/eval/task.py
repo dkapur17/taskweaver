@@ -15,7 +15,8 @@ class Task:
             system_prompt: Optional[str] = None,
             eval_config: Optional[EvaluationConfig] = None,
             is_chat_task: bool = True,
-            skip_formatting: bool = False
+            skip_formatting: bool = False,
+            enable_thinking: bool = True
     ):
 
         self.task_name = task_name  
@@ -25,6 +26,7 @@ class Task:
         self.eval_config = eval_config
         self.is_chat_task = is_chat_task
         self.skip_formatting = skip_formatting
+        self.enable_thinking = enable_thinking
 
         self.dataset = dataset
         if not skip_formatting:
@@ -85,7 +87,7 @@ class Task:
                 model_input_texts = tokenizer.apply_chat_template(batch['X'], 
                                                             tokenize=False, 
                                                             add_generation_prompt=True, 
-                                                            enable_thinking=False)
+                                                            enable_thinking=self.enable_thinking)
                 # Handle both formatted (skip_formatting=True) and unformatted data
                 if self.skip_formatting:
                     y = batch['y']

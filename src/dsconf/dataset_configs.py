@@ -64,11 +64,13 @@ class DatasetConfig(ABC):
         return cls.non_chat_processor
     
     @classmethod
-    def _build_chat_prompt_completion(cls, user_content:str, assistant_content:str) -> List[Message]:
-        return [
+    def _build_chat_prompt_completion(cls, user_content:str, assistant_content:str) -> Tuple[List[Message], List[Message]]:
+        prompt = [
             {'role': 'system', 'content': cls.system_message},
             {'role': 'user', 'content': user_content},
-        ], [{'role': 'assistant', 'content': assistant_content}]
+        ]
+        completion = [{'role': 'assistant', 'content': assistant_content}]
+        return prompt, completion
         
     @classmethod
     def _build_text_prompt(cls, question:str) -> str:
@@ -108,16 +110,16 @@ class DatasetConfig(ABC):
     def to_eval_format(cls, processed_data: Dataset, is_chat: bool) -> Dict[str, List]:
         """Convert processor output to eval format (X, y_true, y_gt)."""
         if is_chat:
-            # Extract prompts (system + user) and completions (assistant)
-            X = []
+            # Chat processors return prompt (list of messages) and completion (list of messages)
+            # Extract the prompt messages (system + user) and completion content (assistant)
+            X = processed_data['prompt']  # Already list of message lists
             y = []
-            for messages in processed_data['messages']:
-                # Combine system and user messages for prompt
-                prompt_msgs = [msg for msg in messages if msg['role'] in ['system', 'user']]
-                X.append(prompt_msgs)
-                # Extract assistant response
-                assistant_msg = next((msg for msg in messages if msg['role'] == 'assistant'), None)
-                y.append(assistant_msg['content'] if assistant_msg else '')
+            for completion_msgs in processed_data['completion']:
+                # Extract assistant content from completion messages
+                if isinstance(completion_msgs, list) and len(completion_msgs) > 0:
+                    y.append(completion_msgs[0]['content'])
+                else:
+                    y.append('')
             return {'X': X, 'y': y}
         else:
             # Non-chat: prompts are X, completions are y
