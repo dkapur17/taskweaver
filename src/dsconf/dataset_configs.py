@@ -459,6 +459,191 @@ class HellaSwagConfig(DatasetConfig):
     def get_eval_config(cls):
         from eval.eval_configs import MultipleChoiceConfig
         return MultipleChoiceConfig(choices=['0', '1', '2', '3'])
+
+
+@DatasetConfig.register('allenai/social_i_qa')
+class SocialIQAConfig(DatasetConfig):
+
+    system_message = "Answer the question about social interactions by choosing the most appropriate option. Respond only with A, B, or C"
+    train_split = 'train'
+    test_split = 'validation'
+
+    @staticmethod
+    def chat_processor(batch: Dataset) -> ChatOutput:
+        
+        prompts = []
+        completions = []
+
+        for context, question, answerA, answerB, answerC, label in zip(
+            batch['context'], batch['question'], batch['answerA'], 
+            batch['answerB'], batch['answerC'], batch['label']
+        ):
+            full_question = f"{context}\n{question}\nA. {answerA}\nB. {answerB}\nC. {answerC}"
+            # Convert label '1', '2', '3' to 'A', 'B', 'C'
+            answer = chr(ord('A') + int(label) - 1)
+            prompt, completion = SocialIQAConfig._build_chat_prompt_completion(full_question, answer)
+            prompts.append(prompt)
+            completions.append(completion)
+
+        return {'prompt': prompts, 'completion': completions}
+    
+    @staticmethod
+    def non_chat_processor(batch: Dataset) -> NonChatOutput:
+        
+        prompts = []
+        completions = []
+
+        for context, question, answerA, answerB, answerC, label in zip(
+            batch['context'], batch['question'], batch['answerA'], 
+            batch['answerB'], batch['answerC'], batch['label']
+        ):
+            full_question = f"{context}\n{question}\nA. {answerA}\nB. {answerB}\nC. {answerC}"
+            # Convert label '1', '2', '3' to 'A', 'B', 'C'
+            answer = chr(ord('A') + int(label) - 1)
+            prompts.append(SocialIQAConfig._build_text_prompt(full_question))
+            completions.append(f" {answer}")
+
+        return {'prompt': prompts, 'completion': completions}
+    
+    @classmethod
+    def get_eval_config(cls):
+        from eval.eval_configs import MultipleChoiceConfig
+        return MultipleChoiceConfig(choices=['A', 'B', 'C'])
+
+
+@DatasetConfig.register('ChilleD/SVAMP')
+class SVAMPConfig(DatasetConfig):
+
+    system_message = "Solve the math word problem step by step and provide the final numerical answer"
+    train_split = 'train'
+    test_split = 'test'
+
+    @staticmethod
+    def chat_processor(batch: Dataset) -> ChatOutput:
+        
+        prompts = []
+        completions = []
+
+        for body, question, answer in zip(batch['Body'], batch['Question'], batch['Answer']):
+            full_question = f"{body} {question}"
+            prompt, completion = SVAMPConfig._build_chat_prompt_completion(full_question, str(answer))
+            prompts.append(prompt)
+            completions.append(completion)
+
+        return {'prompt': prompts, 'completion': completions}
+    
+    @staticmethod
+    def non_chat_processor(batch: Dataset) -> NonChatOutput:
+        
+        prompts = []
+        completions = []
+
+        for body, question, answer in zip(batch['Body'], batch['Question'], batch['Answer']):
+            full_question = f"{body} {question}"
+            prompts.append(SVAMPConfig._build_text_prompt(full_question))
+            completions.append(f" {answer}")
+
+        return {'prompt': prompts, 'completion': completions}
+    
+    @classmethod
+    def get_eval_config(cls):
+        from eval.eval_configs import NumericConfig
+        return NumericConfig(tolerance=1e-1)
+
+
+@DatasetConfig.register('wics/strategy-qa', 'strategyQA')
+class StrategyQAConfig(DatasetConfig):
+
+    system_message = "Answer the question with yes or no based on implicit reasoning and common knowledge"
+    train_split = 'train'
+    test_split = 'test'
+
+    @staticmethod
+    def chat_processor(batch: Dataset) -> ChatOutput:
+        
+        prompts = []
+        completions = []
+
+        for question, answer in zip(batch['question'], batch['answer']):
+            answer_text = 'yes' if answer else 'no'
+            prompt, completion = StrategyQAConfig._build_chat_prompt_completion(question, answer_text)
+            prompts.append(prompt)
+            completions.append(completion)
+
+        return {'prompt': prompts, 'completion': completions}
+    
+    @staticmethod
+    def non_chat_processor(batch: Dataset) -> NonChatOutput:
+        
+        prompts = []
+        completions = []
+
+        for question, answer in zip(batch['question'], batch['answer']):
+            answer_text = 'yes' if answer else 'no'
+            prompts.append(StrategyQAConfig._build_text_prompt(question))
+            completions.append(f" {answer_text}")
+
+        return {'prompt': prompts, 'completion': completions}
+    
+    @classmethod
+    def get_eval_config(cls):
+        from eval.eval_configs import BooleanConfig
+        return BooleanConfig(true_values=['yes', 'true', '1'], false_values=['no', 'false', '0'])
+
+
+class RACEConfig(DatasetConfig):
+
+    system_message = "Read the article and answer the question by choosing the most appropriate option. Respond only with A, B, C, or D"
+    train_split = 'train'
+    test_split = 'test'
+
+    @staticmethod
+    def chat_processor(batch: Dataset) -> ChatOutput:
+        
+        prompts = []
+        completions = []
+
+        for article, question, options, answer in zip(batch['article'], batch['question'], batch['options'], batch['answer']):
+            full_question = f"Article: {article}\n\nQuestion: {question}\n" + "\n".join([f"{chr(65+i)}. {opt}" for i, opt in enumerate(options)])
+            prompt, completion = RACEConfig._build_chat_prompt_completion(full_question, answer)
+            prompts.append(prompt)
+            completions.append(completion)
+
+        return {'prompt': prompts, 'completion': completions}
+    
+    @staticmethod
+    def non_chat_processor(batch: Dataset) -> NonChatOutput:
+        
+        prompts = []
+        completions = []
+
+        for article, question, options, answer in zip(batch['article'], batch['question'], batch['options'], batch['answer']):
+            full_question = f"Article: {article}\n\nQuestion: {question}\n" + "\n".join([f"{chr(65+i)}. {opt}" for i, opt in enumerate(options)])
+            prompts.append(RACEConfig._build_text_prompt(full_question))
+            completions.append(f" {answer}")
+
+        return {'prompt': prompts, 'completion': completions}
+    
+    @classmethod
+    def get_eval_config(cls):
+        from eval.eval_configs import MultipleChoiceConfig
+        # RACE typically has 4 options (A, B, C, D)
+        return MultipleChoiceConfig(choices=['A', 'B', 'C', 'D'])
+
+
+# @DatasetConfig.register('ehovy/race', 'all')
+# class RACEAllConfig(RACEConfig):
+#     pass
+
+
+# @DatasetConfig.register('ehovy/race', 'high')
+# class RACEHighConfig(RACEConfig):
+#     pass
+
+
+@DatasetConfig.register('ehovy/race', 'middle')
+class RACEMiddleConfig(RACEConfig):
+    pass
     
 class DatasetMixer(DatasetConfig):
     """Mix of multiple datasets that can be used anywhere a DatasetConfig is expected."""
