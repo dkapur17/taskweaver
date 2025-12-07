@@ -135,12 +135,25 @@ class ExactMatchConfig(EvaluationConfig):
     
     eval_type = "EXACT_MATCH"
 
-    def __init__(self, normalize: bool = True, case_sensitive: bool = False):
+    def __init__(self, normalize: bool = True, case_sensitive: bool = False, 
+                 strip_think_tags: bool = False, extract_last_word: bool = False):
         self.normalize = normalize
         self.case_sensitive = case_sensitive
+        self.strip_think_tags = strip_think_tags
+        self.extract_last_word = extract_last_word
     
     def parse_prediction(self, pred: str) -> str:
         pred = pred.strip()
+        
+        # Remove think tags if enabled
+        if self.strip_think_tags:
+            pred = re.sub(r'<think>.*?</think>', '', pred, flags=re.DOTALL).strip()
+        
+        # Extract last word if enabled
+        if self.extract_last_word:
+            words = pred.split()
+            pred = words[-1] if words else pred
+        
         if self.normalize:
             pred = ' '.join(pred.split())  # Normalize whitespace
         if not self.case_sensitive:

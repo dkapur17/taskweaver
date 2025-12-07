@@ -16,7 +16,7 @@ class Task:
             eval_config: Optional[EvaluationConfig] = None,
             is_chat_task: bool = True,
             skip_formatting: bool = False,
-            enable_thinking: bool = True
+            enable_thinking: bool = False
     ):
 
         self.task_name = task_name  

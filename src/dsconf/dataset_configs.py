@@ -333,7 +333,7 @@ class SNLIConfig(DatasetConfig):
     @classmethod
     def get_eval_config(cls):
         from eval.eval_configs import ExactMatchConfig
-        return ExactMatchConfig(case_sensitive=False)
+        return ExactMatchConfig(case_sensitive=False, strip_think_tags=True, extract_last_word=True)
 
 
 @DatasetConfig.register('winogrande', 'winogrande_m')
