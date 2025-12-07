@@ -207,7 +207,7 @@ def main():
         bf16=args.train.bf16,
         logging_steps=args.train.logging_steps,
         warmup_ratio=args.train.warmup_ratio,
-        save_strategy='no'
+        save_strategy='no',
         # Disable DataParallel - TaskWeaver's dynamic LoRA injection doesn't support it
         # The hypernetwork generates weights that are stored as instance attributes,
         # which don't properly replicate across DataParallel's model copies

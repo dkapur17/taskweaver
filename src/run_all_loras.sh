@@ -36,10 +36,10 @@ shift  # Remove first argument
 # Default parameters
 SPLIT="test"
 DEVICE="cuda"
-BATCH_SIZE=4
+BATCH_SIZE=32
 MAX_TOKENS=256
 TEMPERATURE=0.7
-NUM_PASS=2
+NUM_PASS=3
 
 # Parse optional arguments
 while [[ $# -gt 0 ]]; do

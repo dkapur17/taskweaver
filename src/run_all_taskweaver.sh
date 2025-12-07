@@ -37,7 +37,7 @@ shift  # Remove first argument
 DATASETS_ARG="all"
 SPLIT="test"
 DEVICE="auto"
-BATCH_SIZE=8
+BATCH_SIZE=32
 MAX_TOKENS=256
 TEMPERATURE=0.7
 NUM_PASS=3
