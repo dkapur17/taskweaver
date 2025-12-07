@@ -5,6 +5,9 @@ from dsconf import DatasetConfig, DatasetMixer
 from lora import LoraFinetuner
 
 from typing import List, Type, Optional, Literal
+from dotenv import load_dotenv
+
+load_dotenv('../.env')
 
 
 @dataclass

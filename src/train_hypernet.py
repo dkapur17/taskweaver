@@ -76,9 +76,10 @@ class TrainConfig:
     num_train_epochs: float = 3.0
     per_device_train_batch_size: int = 2
     gradient_accumulation_steps: int = 2
-    learning_rate: float = 5e-5
+    learning_rate: float = 1e-6
     bf16: bool = False
     logging_steps: int = 10
+    warmup_ratio: float = 0.1
 
 @dataclass
 class MixerConfig:
@@ -185,7 +186,8 @@ def main():
     pad_token_id = tokenizer.convert_tokens_to_ids(pad_token)
     collator = DataCollatorWithPromptLength(pad_token_id=pad_token_id)
 
-    output_dir = os.path.join(args.output_dir, args.model.replace('/', '_'), dataset_id)
+    run_identifier = f"d{args.hypernet.hidden_dim}_r{args.hypernet.lora_rank}_a{args.hypernet.lora_alpha}"
+    output_dir = os.path.join(args.output_dir, args.model.replace('/', '_'), run_identifier)
 
     trainer_args = TrainingArguments(
         output_dir=output_dir,
@@ -195,6 +197,7 @@ def main():
         learning_rate=args.train.learning_rate,
         bf16=args.train.bf16,
         logging_steps=args.train.logging_steps,
+        warmup_ratio=args.train.warmup_ratio,
         save_strategy='no'
     )
 
