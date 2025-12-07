@@ -11,9 +11,12 @@ class EvaluatorSummary:
     """Summary statistics across all tasks"""
     num_tasks: int
     total_samples: int
-    average_accuracy: float
-    task_accuracies: Dict[str, float]
+    average_accuracy: float  # Average of pass@K (highest K) across all tasks
+    task_accuracies: Dict[str, float]  # Pass@K accuracy per task
     timestamp: str
+    max_k: int = 1  # Maximum K value across all tasks
+    pass_at_k_metrics: Optional[Dict[str, Dict[str, float]]] = None  # {task: {pass_at_1: 0.4, pass_at_2: 0.5, ...}}
+    average_pass_at_k: Optional[Dict[str, float]] = None  # {pass_at_1: 0.35, pass_at_2: 0.48, ...}
     
     def __repr__(self):
         return f"EvaluatorSummary(tasks={self.num_tasks}, avg_acc={self.average_accuracy:.4f})"
@@ -129,16 +132,32 @@ class Evaluator:
             print("No results available. Run evaluate() first.")
             return
         
+        # Get summary to access pass@K metrics
+        summary = self.get_summary()
+        max_k = summary.max_k
+        
         # Prepare data for table
         rows = []
         for task_name, result in self.results.items():
-            if result.metrics and 'accuracy' in result.metrics:
-                rows.append({
-                    'name': task_name,
-                    'accuracy': result.metrics['accuracy'],
-                    'samples': result.num_samples,
-                    'eval_type': result.eval_type
-                })
+            if not result.metrics:
+                continue
+            
+            row = {
+                'name': task_name,
+                'samples': result.num_samples,
+                'eval_type': result.eval_type,
+            }
+            
+            # Extract pass@k accuracies
+            k = result.metrics.get('num_pass', 1)
+            for i in range(1, k + 1):
+                key = f'pass_at_{i}_accuracy'
+                if key in result.metrics:
+                    row[f'pass_at_{i}'] = result.metrics[key]
+            
+            # Use highest K for sorting
+            row['accuracy'] = row.get(f'pass_at_{k}', 0.0)
+            rows.append(row)
         
         if not rows:
             print("No metrics available for summary.")
@@ -152,22 +171,54 @@ class Evaluator:
         else:  # name
             rows.sort(key=lambda x: x['name'])
         
-        # Print table
-        print(f"\n{'='*90}")
-        print(f"{'Task':<30} {'Type':<18} {'Accuracy':<12} {'Samples':<10}")
-        print(f"{'='*90}")
-        
-        for row in rows:
-            print(f"{row['name']:<30} {row['eval_type']:<18} "
-                  f"{row['accuracy']:>10.2%}  {row['samples']:>8}")
-        
-        # Print average
-        avg_accuracy = sum(r['accuracy'] for r in rows) / len(rows)
-        total_samples = sum(r['samples'] for r in rows)
-        
-        print(f"{'='*90}")
-        print(f"{'Average':<30} {'':<18} {avg_accuracy:>10.2%}  {total_samples:>8}")
-        print(f"{'='*90}\n")
+        # Build header based on max_k
+        if max_k == 1:
+            # Simple format for K=1
+            header_width = 90
+            print(f"\n{'='*header_width}")
+            print(f"{'Task':<30} {'Type':<18} {'Accuracy':<12} {'Samples':<10}")
+            print(f"{'='*header_width}")
+            
+            for row in rows:
+                acc = row.get('pass_at_1', 0.0)
+                print(f"{row['name']:<30} {row['eval_type']:<18} "
+                      f"{acc:>10.2%}  {row['samples']:>8}")
+            
+            print(f"{'='*header_width}")
+            print(f"{'Average':<30} {'':<18} {summary.average_accuracy:>10.2%}  {summary.total_samples:>8}")
+            print(f"{'='*header_width}\n")
+        else:
+            # Extended format for K>1: show all pass@k columns
+            pass_cols = [f'Pass@{i}' for i in range(1, max_k + 1)]
+            col_width = 10
+            pass_section_width = col_width * max_k
+            header_width = 50 + pass_section_width + 10
+            
+            print(f"\n{'='*header_width}")
+            header = f"{'Task':<30} {'Type':<18} "
+            for col in pass_cols:
+                header += f"{col:>{col_width}}"
+            header += f"{'Samples':>10}"
+            print(header)
+            print(f"{'='*header_width}")
+            
+            for row in rows:
+                line = f"{row['name']:<30} {row['eval_type']:<18} "
+                for i in range(1, max_k + 1):
+                    acc = row.get(f'pass_at_{i}', 0.0)
+                    line += f"{acc:>{col_width}.2%}"
+                line += f"{row['samples']:>10}"
+                print(line)
+            
+            # Print average row
+            print(f"{'='*header_width}")
+            avg_line = f"{'Average':<30} {'':<18} "
+            for i in range(1, max_k + 1):
+                avg = summary.average_pass_at_k.get(f'pass_at_{i}', 0.0)
+                avg_line += f"{avg:>{col_width}.2%}"
+            avg_line += f"{summary.total_samples:>10}"
+            print(avg_line)
+            print(f"{'='*header_width}\n")
     
     def get_summary(self) -> EvaluatorSummary:
         """
@@ -182,20 +233,53 @@ class Evaluator:
         task_accuracies = {}
         accuracies = []
         total_samples = 0
+        max_k = 1
+        pass_at_k_metrics = {}
         
+        # Extract pass@K metrics from all tasks
         for task_name, result in self.results.items():
-            if result.metrics and 'accuracy' in result.metrics:
-                acc = result.metrics['accuracy']
+            if not result.metrics:
+                continue
+                
+            total_samples += result.num_samples
+            
+            # Determine K for this task
+            k = result.metrics.get('num_pass', 1)
+            max_k = max(max_k, k)
+            
+            # Extract all pass@k accuracies for this task
+            task_pass_metrics = {}
+            for i in range(1, k + 1):
+                key = f'pass_at_{i}_accuracy'
+                if key in result.metrics:
+                    task_pass_metrics[f'pass_at_{i}'] = result.metrics[key]
+            
+            pass_at_k_metrics[task_name] = task_pass_metrics
+            
+            # Use pass@K (highest k) as the main accuracy
+            highest_k_key = f'pass_at_{k}_accuracy'
+            if highest_k_key in result.metrics:
+                acc = result.metrics[highest_k_key]
                 task_accuracies[task_name] = acc
                 accuracies.append(acc)
-                total_samples += result.num_samples
+        
+        # Compute average for each pass@k level
+        average_pass_at_k = {}
+        for i in range(1, max_k + 1):
+            pass_key = f'pass_at_{i}'
+            values = [metrics.get(pass_key, 0.0) for metrics in pass_at_k_metrics.values() if pass_key in metrics]
+            if values:
+                average_pass_at_k[pass_key] = sum(values) / len(values)
         
         return EvaluatorSummary(
             num_tasks=len(self.tasks),
             total_samples=total_samples,
             average_accuracy=sum(accuracies) / len(accuracies) if accuracies else 0.0,
             task_accuracies=task_accuracies,
-            timestamp=datetime.now().isoformat()
+            timestamp=datetime.now().isoformat(),
+            max_k=max_k,
+            pass_at_k_metrics=pass_at_k_metrics,
+            average_pass_at_k=average_pass_at_k
         )
     
     def save_results(self, filepath: Union[str, Path], metadata: Optional[Dict[str, Any]] = None) -> None:

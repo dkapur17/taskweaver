@@ -97,7 +97,6 @@ class EvaluationConfig(ABC):
         """
         # Determine if this is K-pass evaluation
         num_pass = 1
-        print("predictions:", predictions)
         if predictions and isinstance(predictions[0], list):
             num_pass = len(predictions[0])
         
