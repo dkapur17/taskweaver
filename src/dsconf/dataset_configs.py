@@ -336,7 +336,7 @@ class SNLIConfig(DatasetConfig):
         return ExactMatchConfig(case_sensitive=False, strip_think_tags=True, extract_last_word=True)
 
 
-@DatasetConfig.register('winogrande', 'winogrande_m')
+@DatasetConfig.register('allenai/winogrande', 'winogrande_m')
 class WinograndeConfig(DatasetConfig):
 
     system_message = "Fill in the blank with the correct option. Respond only with 1 or 2"
@@ -541,46 +541,6 @@ class SVAMPConfig(DatasetConfig):
         return NumericConfig(tolerance=1e-1)
 
 
-# @DatasetConfig.register('wics/strategy-qa', 'strategyQA')
-# class StrategyQAConfig(DatasetConfig):
-# 
-    # system_message = "Answer the question with yes or no based on implicit reasoning and common knowledge"
-    # train_split = 'train'
-    # test_split = 'test'
-
-    # @staticmethod
-    # def chat_processor(batch: Dataset) -> ChatOutput:
-        
-    #     prompts = []
-    #     completions = []
-
-    #     for question, answer in zip(batch['question'], batch['answer']):
-    #         answer_text = 'yes' if answer else 'no'
-    #         prompt, completion = StrategyQAConfig._build_chat_prompt_completion(question, answer_text)
-    #         prompts.append(prompt)
-    #         completions.append(completion)
-
-    #     return {'prompt': prompts, 'completion': completions}
-    
-    # @staticmethod
-    # def non_chat_processor(batch: Dataset) -> NonChatOutput:
-        
-    #     prompts = []
-    #     completions = []
-
-    #     for question, answer in zip(batch['question'], batch['answer']):
-    #         answer_text = 'yes' if answer else 'no'
-    #         prompts.append(StrategyQAConfig._build_text_prompt(question))
-    #         completions.append(f" {answer_text}")
-
-    #     return {'prompt': prompts, 'completion': completions}
-    
-    # @classmethod
-    # def get_eval_config(cls):
-    #     from eval.eval_configs import BooleanConfig
-    #     return BooleanConfig(true_values=['yes', 'true', '1'], false_values=['no', 'false', '0'])
-
-
 class RACEConfig(DatasetConfig):
 
     system_message = "Read the article and answer the question by choosing the most appropriate option. Respond only with A, B, C, or D"
@@ -619,16 +579,6 @@ class RACEConfig(DatasetConfig):
         from eval.eval_configs import MultipleChoiceConfig
         # RACE typically has 4 options (A, B, C, D)
         return MultipleChoiceConfig(choices=['A', 'B', 'C', 'D'])
-
-
-# @DatasetConfig.register('ehovy/race', 'all')
-# class RACEAllConfig(RACEConfig):
-#     pass
-
-
-# @DatasetConfig.register('ehovy/race', 'high')
-# class RACEHighConfig(RACEConfig):
-#     pass
 
 
 @DatasetConfig.register('ehovy/race', 'middle')

@@ -1,8 +1,11 @@
+import sys
 from jsonargparse import ArgumentParser, Namespace
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from dsconf import DatasetConfig, DatasetMixer
 from lora import LoraFinetuner
+
+from utils import print_args, serialize_args
 
 from typing import List, Type, Optional, Literal
 from dotenv import load_dotenv
@@ -30,8 +33,7 @@ class TrainConfig:
     learning_rate: float = 5e-5
     bf16: bool = False
     logging_steps: int = 10
-    save_total_limit: int = 1
-    save_steps: int = 100
+    save_strategy: str = 'no'
 
 
 @dataclass
@@ -56,7 +58,12 @@ def parse_args() -> Namespace:
     # Override target_modules to support nargs='+'
     parser.add_argument('--lora.target_modules', type=str, nargs='+', default=['q_proj', 'v_proj'], help='Target modules for LoRA (can specify multiple)')
 
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    # Print all arguments neatly
+    print_args(args)
+
+    return args
 
 def get_dataset_configs(datasets: List[str], ignore_list: List[str], mixer_config: MixerConfig) -> List[Type[DatasetConfig]]:
 
@@ -66,16 +73,21 @@ def get_dataset_configs(datasets: List[str], ignore_list: List[str], mixer_confi
         for path, name in DatasetConfig.list_available():
             if f"{path}.{name}" not in ignore_list:
                 configs.append(DatasetConfig.from_dataset_path(path, name))
+    elif 'mix' in datasets:
+        target_datasets = [path if name is None else f"{path}.{name}" for path, name in DatasetConfig.list_available()]
+        target_datasets = [dataset_id for dataset_id in target_datasets if dataset_id not in ignore_list]
+        print(f"Mixing datasets: {target_datasets}")
+        configs.append(DatasetMixer(target_datasets, stopping_strategy=mixer_config.stopping_strategy))
     else:
         for dataset in datasets:
-            if dataset == 'mix':
-                configs.append(DatasetMixer(stopping_strategy=mixer_config.stopping_strategy))
+            if dataset in ignore_list:
+                print(f"WARNING: {dataset} in list and ignore list. Will be ignoring.")
+                continue
+            if '.' in dataset:
+                path, name = dataset.split('.')
             else:
-                if '.' in dataset:
-                    path, name = dataset.split('.')
-                else:
-                    path, name = dataset, None
-                configs.append(DatasetConfig.from_dataset_path(path, name))
+                path, name = dataset, None
+            configs.append(DatasetConfig.from_dataset_path(path, name))
 
     return configs
 
@@ -99,7 +111,7 @@ if __name__ == "__main__":
             output_dir=args.output_dir
         )
 
-        finetuner.print_trainable_parameters()
+        total_params, trainable_params = finetuner.print_trainable_parameters()
 
         finetuner.train(
             num_train_epochs=args.train.num_train_epochs,
@@ -108,9 +120,17 @@ if __name__ == "__main__":
             learning_rate=args.train.learning_rate,
             bf16=args.train.bf16,
             logging_steps=args.train.logging_steps,
-            save_total_limit=args.train.save_total_limit,
-            save_steps=args.train.save_steps,
+            save_strategy=args.train.save_strategy,
             run_eval=args.run_eval
         )
-        finetuner.save()
+
+        finetuner.save(
+            metadata = {
+                'invocation': 'python ' + ' '.join(sys.argv),
+                'configuration': serialize_args(args),
+                'total_params': total_params,
+                'trainable_params': trainable_params,
+                'percent_trainable': trainable_params / total_params
+            }
+        )
     

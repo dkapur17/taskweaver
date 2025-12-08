@@ -163,8 +163,8 @@ if __name__ == "__main__":
     start_datetime = datetime.now()
 
     model, tokenizer = get_model_and_tokenizer(args.model_path, args.model_type, args.device)
-    args.datasets = [dataset for dataset in args.datasets[0].split(" ")]
-    args.ignore_datasets = [dataset for dataset in args.ignore_datasets[0].split(" ")]
+    # args.datasets = [dataset for dataset in args.datasets[0].split(" ")]
+    # args.ignore_datasets = [dataset for dataset in args.ignore_datasets[0].split(" ")]
     print("Running: ", args.datasets)
     print("Ignoring: ",  args.ignore_datasets)
     dataset_configs = get_dataset_configs(args.datasets, args.ignore_datasets)
@@ -192,11 +192,10 @@ if __name__ == "__main__":
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         model_name = Path(args.model_path).name.replace('/', '-')
-        output_dir = Path(args.output_dir) / f"{model_name}_{args.model_type}"
-        output_dir.mkdir(parents=True, exist_ok=True)
+        output_dir = os.path.join(args.output_dir, args.model_type, model_name)
+        os.makedirs(output_dir, exist_ok=True)
         
-        output_file = output_dir / f"eval_{timestamp}.json"
-        
+        output_file = os.path.join(output_dir, f"eval_{timestamp}.json")        
         # Capture GPU info
         gpu_info = get_gpu_info()
         

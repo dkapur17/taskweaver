@@ -5,11 +5,14 @@ This module provides a high level abstraction for finetuning a chat or non-chat 
 on any dataset by providing its corresponding DatasetConfig, and relevant lora parameters
 """
 
+import os
+import json
+
 from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments
 from datasets import Dataset
 from peft import LoraConfig, get_peft_model
 from trl import SFTTrainer
-import os
+
 from dsconf.dataset_configs import DatasetConfig
 
 from typing import Optional, Any, Dict, List, Tuple, Type
@@ -40,7 +43,7 @@ class LoraFinetuner:
         self.model, self.tokenizer = self._get_pretrained(model_path, device_map, lora_config)
         self.is_chat = self.tokenizer.chat_template is not None
         self.train_dataset, self.test_dataset = self._get_datasets(dataset_config, self.is_chat, dataset_train_split, dataset_test_split)
-        self.output_dir = os.path.join(output_dir, model_path.replace('/', '_'), dataset_config.id().replace('/', '_').replace('.', '_'))
+        self.output_dir = os.path.join(output_dir, model_path.replace('/', '_'), dataset_config.id().replace('/', '_'))
 
 
     def _get_pretrained(
@@ -69,8 +72,11 @@ class LoraFinetuner:
 
         return train_dataset, test_dataset
     
-    def print_trainable_parameters(self):
-        """Print the number of trainable parameters in the model."""
+    def print_trainable_parameters(self) -> Tuple[int, int]:
+        """
+        Print the number of trainable parameters in the model.
+        And return total and trainable parameters
+        """
         trainable_params = 0
         all_params = 0
         
@@ -84,6 +90,8 @@ class LoraFinetuner:
         print(f"\nTotal params: {all_params:,}")
         print(f"Trainable params: {trainable_params:,}")
         print(f"Trainable %: {100 * trainable_params / all_params:.2f}%")
+
+        return all_params, trainable_params
     
     def train(
             self,
@@ -93,8 +101,7 @@ class LoraFinetuner:
             learning_rate: float = 5e-5,
             bf16: bool = False,
             logging_steps: int = 10,
-            save_total_limit: int = 2,
-            save_steps: int = 100,
+            save_strategy: str = 'no',
             run_eval:bool = False,
             **trainer_kwargs) -> None:
 
@@ -106,8 +113,7 @@ class LoraFinetuner:
             bf16=bf16,
             logging_steps=logging_steps,
             output_dir=self.output_dir,
-            save_total_limit=save_total_limit,
-            save_steps=save_steps,
+            save_strategy=save_strategy,
             remove_unused_columns=False,
             **trainer_kwargs
         )
@@ -127,9 +133,14 @@ class LoraFinetuner:
             metrics = trainer.evaluate()
             print(f"Evaluation metrics: {metrics}")
 
-    def save(self):
+    def save(self, metadata: Optional[Dict] = None):
         print(f"Saving mode to {self.output_dir}")
         self.model.save_pretrained(self.output_dir)
+
+        # Saving metadata
+        if metadata:
+            with open(os.path.join(self.output_dir, 'metadata.json'), 'w') as f:
+                json.dump(metadata, f, indent=2)
 
 if __name__ == "__main__":
 
