@@ -6,9 +6,11 @@ with TensorBoard logging support.
 """
 
 import os
-from jsonargparse import ArgumentParser, Namespace
+import sys
+import json
+from jsonargparse import ArgumentParser
 from dataclasses import dataclass
-from typing import List, Dict, Optional, Tuple, Literal
+from typing import List, Optional, Tuple, Literal
 from dotenv import load_dotenv
 
 import torch
@@ -16,52 +18,19 @@ from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     TrainingArguments,
-    TrainerCallback
 )
 from trl import SFTTrainer
 from datasets import Dataset
 
-from torch.utils.tensorboard import SummaryWriter
-
 from hypernet import TaskWeaver
 from hypernet import DataCollatorWithPromptLength
 
-from dsconf import DatasetConfig, DatasetMixer
+from dsconf import DatasetMixer, DatasetConfig
+from utils import print_args, serialize_args
 
 from dotenv import load_dotenv
 
 load_dotenv('../.env')
-
-class TensorBoardCallback(TrainerCallback):
-    """Callback to log training metrics to TensorBoard."""
-
-    def __init__(self, log_dir: str = './runs'):
-        """
-        Initialize TensorBoard callback.
-
-        Args:
-            log_dir: Directory for TensorBoard logs
-        """
-        self.writer = SummaryWriter(log_dir=log_dir)
-
-    def on_log(self, args, state, control, logs=None, **kwargs):
-        """
-        Log metrics to TensorBoard.
-
-        Args:
-            args: Training arguments
-            state: Trainer state
-            control: Trainer control
-            logs: Dictionary of metrics to log
-        """
-        if logs is not None:
-            for key, value in logs.items():
-                if isinstance(value, (int, float)):
-                    self.writer.add_scalar(key, value, state.global_step)
-
-    def on_train_end(self, args, state, control, **kwargs):
-        """Close the TensorBoard writer at the end of training."""
-        self.writer.close()
 
 @dataclass
 class HypernetConfig:
@@ -87,6 +56,10 @@ class MixerConfig:
     seed: Optional[int] = None
     stopping_strategy: Literal['first_exhausted', 'all_exhausted'] = 'first_exhausted'
 
+@dataclass
+class DatasetSplitConfig:
+    train_split: str = 'train'
+    test_split: Optional[str] = 'test'
 
 def parse_args():
     """Parse commandline arguments"""
@@ -94,14 +67,19 @@ def parse_args():
 
     parser.add_argument('--model', type=str, default='EleutherAI/pythia-70m', help='Pretrained model path')
     parser.add_argument('--datasets', type=str, nargs='+', default=['all'], help="Datasets to include in Mixer")
+    parser.add_argument('--ignore_datasets', type=str, nargs='+', default=[], help='Datasets to ignore when using "all"')
     parser.add_argument('--output_dir', type=str, default='_models/hypernet', help='Base output directory for trained models')
     parser.add_argument('--device', type=str, default='auto', help="Device to train on")
+    parser.add_argument('--run_eval', action='store_true', help="Run evaluation after training")
     parser.add_class_arguments(HypernetConfig, 'hypernet', help='TaskWeaver configuration')
     parser.add_class_arguments(TrainConfig, 'train', help='Training configuration parameters')
     parser.add_class_arguments(MixerConfig, 'mixer', help='DatasetMixer configuration parameters')
+    parser.add_class_arguments(DatasetSplitConfig, 'dataset', help='Dataset split configuration')
     parser.add_argument('--hypernet.target_modules', type=str, nargs='+', default=['query_key_value'], help='Modules to generate LoRA weights for')
 
-    return parser.parse_args()
+    args = parser.parse_args()
+    print_args(args)
+    return args
 
 
 def load_model_and_tokenizer(model_name: str) -> Tuple[AutoModelForCausalLM, AutoTokenizer]:
@@ -126,28 +104,33 @@ def load_model_and_tokenizer(model_name: str) -> Tuple[AutoModelForCausalLM, Aut
     return model, tokenizer
 
 
-def prepare_datasets(datasets: List[str], mixer_conf:MixerConfig, is_chat: bool, train_split: str = "train", test_split="test") -> Tuple[Dataset, Dataset, str]:
+def prepare_datasets(
+        datasets: List[str], 
+        ignore_list: List[str], 
+        mixer_config:MixerConfig, 
+        is_chat: bool, 
+        train_split: str = "train", 
+        test_split: str ="test",
+        run_eval:bool = True) -> Tuple[Dataset, Optional[Dataset]]:
     """
     Get train and test datasets
     """
     print(f"Loading {'Chat' if is_chat else 'Non-Chat'} version of the datasets")
     
-    datasets = datasets if 'all' not in datasets else None
+    if 'all' in datasets:
+        datasets = DatasetConfig.list_available(return_ids=True)
+        datasets = [dataset_id for dataset_id in datasets if dataset_id not in ignore_list]
 
-    config = DatasetMixer(datasets, seed=mixer_conf.seed, stopping_strategy=mixer_conf.stopping_strategy)
+    print(f"Mixing datasets: {datasets}")
+    config = DatasetMixer(datasets, seed=mixer_config.seed, stopping_strategy=mixer_config.stopping_strategy)
     train_dataset = config.load_and_process(is_chat, train_split)
-    test_dataset = config.load_and_process(is_chat, test_split)
-    return train_dataset, test_dataset, config.id()
+    test_dataset = config.load_and_process(is_chat, test_split) if run_eval else None
+    return train_dataset, test_dataset
 
 
 def main():
 
     args = parse_args()
-
-    hf_token = os.environ.get('HF_TOKEN')
-    if hf_token:
-        from huggingface_hub import login
-        login(token=hf_token)
 
     if args.device == 'auto':
         if torch.cuda.is_available():
@@ -171,11 +154,15 @@ def main():
 
     lm, tokenizer = load_model_and_tokenizer(args.model)
 
-    train_dataset, test_dataset, dataset_id = prepare_datasets(
+    train_dataset, test_dataset = prepare_datasets(
                                     datasets=args.datasets, 
-                                    mixer_conf=args.mixer,
-                                    is_chat=tokenizer.chat_template is not None
-                                    )
+                                    ignore_list=args.ignore_datasets,
+                                    mixer_config=args.mixer,
+                                    is_chat=tokenizer.chat_template is not None,
+                                    train_split=args.dataset.train_split,
+                                    test_split=args.dataset.test_split,
+                                    run_eval=args.run_eval
+                                )
     
     hypernet = TaskWeaver(
         lm=lm,
@@ -189,7 +176,7 @@ def main():
 
     hypernet.to(device)
 
-    hypernet.print_trainable_parameters()
+    total_params, trainable_params = hypernet.print_trainable_parameters()
 
     pad_token = tokenizer.pad_token or tokenizer.eos_token
     pad_token_id = tokenizer.convert_tokens_to_ids(pad_token)
@@ -225,11 +212,24 @@ def main():
 
     trainer.train()
 
-    metrics = trainer.evaluate()
-    print(f"Evalation metrics: {metrics}")
+    if args.run_eval:
+        metrics = trainer.evaluate()
+        print(f"Evalation metrics: {metrics}")
 
     print(f"Saving model")
     hypernet.save_pretrained(output_dir)
+
+    with open(os.path.join(output_dir, 'metadata.json'), 'w') as f:
+        json.dump(
+            {
+                'invocation': 'python ' + ' '.join(sys.argv),
+                'configuration': serialize_args(args),
+                'total_params': total_params,
+                'trainable_params': trainable_params,
+                'percent_trainable': trainable_params / total_params
+            },
+            f
+        )
 
 
 if __name__ == "__main__":

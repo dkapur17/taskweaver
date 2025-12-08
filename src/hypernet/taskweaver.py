@@ -520,8 +520,11 @@ class TaskWeaver(nn.Module):
         """Passthrough for LM config, required by SFTTrainer"""
         return self.lm.config
 
-    def print_trainable_parameters(self):
-        """Print the number of trainable parameters in the model."""
+    def print_trainable_parameters(self) -> Tuple[int, int]:
+        """
+        Print the number of trainable parameters in the model
+        and return total and trainable parameters
+        """
         trainable_params = 0
         all_params = 0
         
@@ -535,3 +538,5 @@ class TaskWeaver(nn.Module):
         print(f"\nTotal params: {all_params:,}")
         print(f"Trainable params: {trainable_params:,}")
         print(f"Trainable %: {100 * trainable_params / all_params:.2f}%")
+
+        return all_params, trainable_params

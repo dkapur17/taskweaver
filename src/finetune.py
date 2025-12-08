@@ -22,6 +22,7 @@ class LoraConfig:
 
 @dataclass
 class MixerConfig:
+    seed: Optional[int] = None
     stopping_strategy: Literal['first_exhausted', 'all_exhausted'] = 'first_exhausted'
 
 
@@ -75,7 +76,11 @@ def get_dataset_configs(datasets: List[str], ignore_list: List[str], mixer_confi
         datasets = [dataset_id for dataset_id in datasets if dataset_id not in ignore_list]
     
     if is_mix:
-        return [DatasetMixer(datasets, stopping_strategy=mixer_config.stopping_strategy)]
+        print(f"Mixing datasets: {datasets}")
+        return [DatasetMixer(datasets,
+                             seed=mixer_config.seed, 
+                             stopping_strategy=mixer_config.stopping_strategy
+                             )]
     else:
         return [DatasetConfig.from_dataset_id(dataset_id) for dataset_id in datasets]
 

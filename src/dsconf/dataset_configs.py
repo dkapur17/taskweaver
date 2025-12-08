@@ -85,7 +85,7 @@ class DatasetConfig(ABC):
         return f"Instruction: {cls.system_message}\nQuestion: {question}\nAnswer:"
     
     @classmethod
-    def load_and_process(cls, is_chat: bool, split: str = 'train', enable_thinking: Optional[bool] = None) -> Dataset:
+    def load_and_process(cls, is_chat: bool, split: str = 'train', enable_thinking: bool = False) -> Dataset:
         """Load the HF dataset and process it."""
 
         # Resolve split
@@ -103,8 +103,7 @@ class DatasetConfig(ABC):
         assert set(dataset.column_names) == set(['prompt', 'completion']), f"Only prompt completion training supported. Modify {cls.id()} processor to return prompt and competion. It has columns: {dataset.column_names}"
         
         # Injecting thinking argument if needed
-        if enable_thinking is not None:
-            dataset = dataset.map(lambda example: {**example, 'chat_template_kwargs': {'enable_thinking': enable_thinking}})
+        dataset = dataset.map(lambda example: {**example, 'chat_template_kwargs': {'enable_thinking': enable_thinking}})
         
         return dataset
 

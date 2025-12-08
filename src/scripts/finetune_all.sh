@@ -12,7 +12,7 @@ python finetune.py \
 --lora.rank 2 \
 --lora.alpha 8 \
 --train.per_device_train_batch_size 16 \
---train.per_device_train_batch_size 1 \
+--train.gradient_accumulation_steps 1 \
 --dataset.train_split train[:10000]
 
 
@@ -25,7 +25,7 @@ python finetune.py \
 --lora.rank 2 \
 --lora.alpha 8 \
 --train.per_device_train_batch_size 8 \
---train.per_device_train_batch_size 2 \
+--train.gradient_accumulation_steps 2 \
 --dataset.train_split train[:10000]
 
 
@@ -38,7 +38,7 @@ python finetune.py \
 --lora.rank 2 \
 --lora.alpha 8 \
 --train.per_device_train_batch_size 4 \
---train.per_device_train_batch_size 4 \
+--train.gradient_accumulation_steps 4 \
 --dataset.train_split train[:10000]
 
 # Mixed dataset finetuning
@@ -52,7 +52,7 @@ python finetune.py \
 --lora.rank 2 \
 --lora.alpha 8 \
 --train.per_device_train_batch_size 16 \
---train.per_device_train_batch_size 1 \
+--train.gradient_accumulation_steps 1 \
 --dataset.train_split train[:10000]
 
 
@@ -65,7 +65,7 @@ python finetune.py \
 --lora.rank 2 \
 --lora.alpha 8 \
 --train.per_device_train_batch_size 8 \
---train.per_device_train_batch_size 2 \
+--train.gradient_accumulation_steps 2 \
 --dataset.train_split train[:10000]
 
 
@@ -78,5 +78,5 @@ python finetune.py \
 --lora.rank 2 \
 --lora.alpha 8 \
 --train.per_device_train_batch_size 4 \
---train.per_device_train_batch_size 4 \
+--train.gradient_accumulation_steps 4 \
 --dataset.train_split train[:10000]

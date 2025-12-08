@@ -74,8 +74,8 @@ class LoraFinetuner:
     
     def print_trainable_parameters(self) -> Tuple[int, int]:
         """
-        Print the number of trainable parameters in the model.
-        And return total and trainable parameters
+        Print the number of trainable parameters in the model,
+        and return total and trainable parameters
         """
         trainable_params = 0
         all_params = 0
