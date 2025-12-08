@@ -71,7 +71,8 @@ def get_dataset_configs(datasets: List[str], ignore_list: List[str], mixer_confi
 
     if 'all' in datasets:
         for path, name in DatasetConfig.list_available():
-            if f"{path}.{name}" not in ignore_list:
+            dataset_id = f"{path}.{name}" if name else path
+            if dataset_id not in ignore_list:
                 configs.append(DatasetConfig.from_dataset_path(path, name))
     elif 'mix' in datasets:
         target_datasets = [path if name is None else f"{path}.{name}" for path, name in DatasetConfig.list_available()]

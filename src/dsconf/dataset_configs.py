@@ -156,6 +156,7 @@ class DatasetConfig(ABC):
             is_chat_task=is_chat,
             skip_formatting=True
         )
+    
 
 ############################################
 ### Per-Dataset Configs
