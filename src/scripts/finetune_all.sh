@@ -3,6 +3,7 @@
 # All datasets except held out datasets
 
 echo "Finetuning Pythia 70M on all datasets"
+
 python finetune.py \
 --model EleutherAI/pythia-70m \
 --datasets all \
@@ -11,6 +12,7 @@ python finetune.py \
 --lora.rank 2 \
 --lora.alpha 8 \
 --train.per_device_train_batch_size 16 \
+--train.per_device_train_batch_size 1 \
 --dataset.train_split train[:10000]
 
 
@@ -23,6 +25,7 @@ python finetune.py \
 --lora.rank 2 \
 --lora.alpha 8 \
 --train.per_device_train_batch_size 8 \
+--train.per_device_train_batch_size 2 \
 --dataset.train_split train[:10000]
 
 
@@ -34,6 +37,7 @@ python finetune.py \
 --lora.target_modules q_proj v_proj \
 --lora.rank 2 \
 --lora.alpha 8 \
+--train.per_device_train_batch_size 4 \
 --train.per_device_train_batch_size 4 \
 --dataset.train_split train[:10000]
 
@@ -48,6 +52,7 @@ python finetune.py \
 --lora.rank 2 \
 --lora.alpha 8 \
 --train.per_device_train_batch_size 16 \
+--train.per_device_train_batch_size 1 \
 --dataset.train_split train[:10000]
 
 
@@ -60,6 +65,7 @@ python finetune.py \
 --lora.rank 2 \
 --lora.alpha 8 \
 --train.per_device_train_batch_size 8 \
+--train.per_device_train_batch_size 2 \
 --dataset.train_split train[:10000]
 
 
@@ -71,5 +77,6 @@ python finetune.py \
 --lora.target_modules q_proj v_proj \
 --lora.rank 2 \
 --lora.alpha 8 \
+--train.per_device_train_batch_size 4 \
 --train.per_device_train_batch_size 4 \
 --dataset.train_split train[:10000]

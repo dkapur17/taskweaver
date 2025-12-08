@@ -43,8 +43,16 @@ class DatasetConfig(ABC):
         return cls._registry[(dataset_path, dataset_name)]
     
     @classmethod
-    def list_available(cls) -> List[tuple[str, Optional[str]]]:
+    def from_dataset_id(cls, dataset_id: str) -> Type['DatasetConfig']:
+        if '.' in dataset_id:
+            return cls.from_dataset_path(*dataset_id.split('.'))
+        return cls.from_dataset_path(dataset_id, None)
+    
+    @classmethod
+    def list_available(cls, return_ids:bool = False) -> List[tuple[str, Optional[str]]]:
         """List all registered dataset (path, name) pairs."""
+        if return_ids:
+            return [path if name is None else f"{path}.{name}" for path, name in cls._registry.keys()]
         return list(cls._registry.keys())
 
     @staticmethod 
@@ -735,7 +743,7 @@ class DatasetMixer(DatasetConfig):
         return len(self._dataset_configs)
     
     def __repr__(self) -> str:
-        if len(self._dataset_configs) <= 5:
+        if len(self._dataset_configs) <= 10:
             return f"DatasetMix({[c.id() for c in self._dataset_configs]})"
         return f"DatasetMix([{self._dataset_configs[0].id()}, ..., {self._dataset_configs[-1].id()}] ({len(self)} datasets))"
     

@@ -46,7 +46,7 @@ def parse_args() -> Namespace:
     parser = ArgumentParser()
     parser.add_argument('--model', type=str, default='google/gemma-3-270m-it', help='HuggingFace model path')
     parser.add_argument('--datasets', type=str, nargs='+', default=['all'], help='Datasets to finetune on (use "all" for all registered datasets)')
-    parser.add_argument('--ignore_datasets', type=str, nargs='+', default=[], help='Datasets to ignore when using "all"')
+    parser.add_argument('--ignore_datasets', type=str, nargs='+', default=[], help='Datasets to ignore when using "all" or "mix"')
     parser.add_argument('--device_map', type=str, default='auto', help='Device map for model loading')
     parser.add_argument('--output_dir', type=str, default='_models/lora', help='Base output directory for trained models')
     parser.add_argument('--run_eval', action='store_true', help='Run evaluation after training')
@@ -67,30 +67,18 @@ def parse_args() -> Namespace:
 
 def get_dataset_configs(datasets: List[str], ignore_list: List[str], mixer_config: MixerConfig) -> List[Type[DatasetConfig]]:
 
-    configs = []
+    is_mix = 'mix' in datasets
 
-    if 'all' in datasets:
-        for path, name in DatasetConfig.list_available():
-            dataset_id = f"{path}.{name}" if name else path
-            if dataset_id not in ignore_list:
-                configs.append(DatasetConfig.from_dataset_path(path, name))
-    elif 'mix' in datasets:
-        target_datasets = [path if name is None else f"{path}.{name}" for path, name in DatasetConfig.list_available()]
-        target_datasets = [dataset_id for dataset_id in target_datasets if dataset_id not in ignore_list]
-        print(f"Mixing datasets: {target_datasets}")
-        configs.append(DatasetMixer(target_datasets, stopping_strategy=mixer_config.stopping_strategy))
+    # Resolve dataset ids
+    if 'all' in datasets or 'mix' in datasets:
+        datasets = DatasetConfig.list_available(return_ids=True)
+        datasets = [dataset_id for dataset_id in datasets if dataset_id not in ignore_list]
+    
+    if is_mix:
+        return [DatasetMixer(datasets, stopping_strategy=mixer_config.stopping_strategy)]
     else:
-        for dataset in datasets:
-            if dataset in ignore_list:
-                print(f"WARNING: {dataset} in list and ignore list. Will be ignoring.")
-                continue
-            if '.' in dataset:
-                path, name = dataset.split('.')
-            else:
-                path, name = dataset, None
-            configs.append(DatasetConfig.from_dataset_path(path, name))
+        return [DatasetConfig.from_dataset_id(dataset_id) for dataset_id in datasets]
 
-    return configs
 
 if __name__ == "__main__":
 
