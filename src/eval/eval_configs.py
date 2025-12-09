@@ -172,52 +172,90 @@ class ExactMatchConfig(EvaluationConfig):
         return prediction == reference
 
 
+import re
+from typing import List, Optional
+
+
 class MultipleChoiceConfig(EvaluationConfig):
     """Evaluation for multiple choice questions"""
     
     eval_type = "MULTIPLE_CHOICE"
 
-    def __init__(self, choices: List[str] = ['A', 'B', 'C', 'D', 'E']):
-        self.choices = [c for c in choices]
+    def __init__(
+        self, 
+        choices: List[str] = ['A', 'B', 'C', 'D', 'E'], 
+        choice_is_index: bool = True,
+        case_sensitive: bool = True,
+    ):
+        self.choices = list(choices)
+        self.choice_is_index = choice_is_index
+        self.case_sensitive = case_sensitive
+    
+    def _normalize(self, text: str) -> str:
+        """Normalize text for comparison if case-insensitive."""
+        return text if self.case_sensitive else text.lower()
+    
+    def _choice_in_text(self, choice: str, text: str) -> bool:
+        """Check if a choice appears in text."""
+        choice_norm = self._normalize(choice)
+        text_norm = self._normalize(text)
+        
+        if self.choice_is_index:
+            # For index choices, check with common delimiters
+            # This prevents 'A' from matching in 'Apple'
+            delimiters = ['', ')', '.', ':', ',', ']', '"', "'", ' ']
+            prefixes = ['', '(', '[', '"', "'", ' ']
+            
+            for prefix in prefixes:
+                for suffix in delimiters:
+                    pattern = f"{prefix}{choice_norm}{suffix}"
+                    if pattern in text_norm:
+                        return True
+            return False
+        else:
+            # For word choices, use word boundary regex
+            pattern = rf'\b{re.escape(choice_norm)}\b'
+            return bool(re.search(pattern, text_norm))
     
     def parse_prediction(self, pred: str) -> Optional[str]:
-        """Extract the choice letter from prediction."""
+        """Extract the choice from prediction."""
         pred = pred.strip()
         
-        # Valid cases
-        as_is = [c for c in self.choices]
-        paran = [f"{c})" for c in self.choices]
-        dot = [f"{c}." for c in self.choices]
-
-        # Exact match
-        if pred in as_is:
-            return pred
-        if pred in paran:
-            return pred[:-1]
-        if pred in dot:
-            return pred[:-1]
-        
-        # Starts or ends with
-        for choice in as_is:
-            if pred.startswith(choice) or pred.endswith(choice):
+        # Check exact match first
+        pred_norm = self._normalize(pred)
+        for choice in self.choices:
+            choice_norm = self._normalize(choice)
+            if pred_norm == choice_norm:
                 return choice
+            # Common exact formats for index choices
+            if self.choice_is_index:
+                if pred_norm in [f"({choice_norm})", f"{choice_norm})", f"{choice_norm}."]:
+                    return choice
         
-        for choice in paran:
-            if pred.startswith(choice) or pred.endswith(choice):
-                return choice[:-1]
+        # Find which choices appear in the prediction
+        found = [choice for choice in self.choices if self._choice_in_text(choice, pred)]
         
-        for choice in dot:
-            if pred.startswith(choice) or pred.endswith(choice):
-                return choice[:-1]
+        # Return only if exactly one choice found
+        if len(found) == 1:
+            return found[0]
         
         return None
     
     def parse_reference(self, ref: str) -> str:
-        """Reference should already be a letter"""
-        return ref.strip()
+        """Normalize reference answer."""
+        ref = ref.strip()
+        if not self.case_sensitive:
+            for choice in self.choices:
+                if choice.lower() == ref.lower():
+                    return choice
+        return ref
     
     def is_correct(self, prediction: Optional[str], reference: str) -> bool:
-        return prediction == reference
+        if prediction is None:
+            return False
+        if self.case_sensitive:
+            return prediction == reference
+        return prediction.lower() == reference.lower()
 
 
 class NumericConfig(EvaluationConfig):

@@ -3,6 +3,7 @@ from typing import List, Dict, Optional, Union, Any
 from dataclasses import dataclass, asdict
 import json
 from datetime import datetime
+from shortuuid import uuid
 from .task import Task
 from .eval_configs import EvaluationResult
 
@@ -294,6 +295,8 @@ class Evaluator:
         if not self.results:
             raise ValueError("No results available. Run evaluate() first.")
         
+        run_identifier = uuid()[:4]
+        
         for task_name, result in self.results.items():
 
             samples = []
@@ -327,16 +330,17 @@ class Evaluator:
                 'samples': samples
             }
 
-            results_file_name = f"{task_name.replace('/', '_')}.results.json"
+            results_file_name = f"{task_name.replace('/', '_')}.results.{run_identifier}.json"
             with open(os.path.join(output_dir, results_file_name), 'w') as f:
                 json.dump(result_dict, f, indent=2)
-        
+
         if metadata:
-            with open(os.path.join(output_dir, 'metadata.json'), 'w') as f:
+            with open(os.path.join(output_dir, f'_metadata.{run_identifier}.json'), 'w') as f:
                 json.dump(metadata, f, indent=2)
         
-        with open(os.path.join(output_dir, 'summary.json'), 'w') as f:
-            json.dump(asdict(self.get_summary()), f, indent=2)
+        if len(self.results) > 1: # Only save summary if evaluating multiple datasets
+            with open(os.path.join(output_dir, f'_summary.{run_identifier}.json'), 'w') as f:
+                json.dump(asdict(self.get_summary()), f, indent=2)
 
         if self.verbose:
             print(f"Saving results, metadata and summary to {output_dir}")
