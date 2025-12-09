@@ -227,7 +227,8 @@ def main():
                 'trainable_params': trainable_params,
                 'percent_trainable': trainable_params / total_params
             },
-            f
+            f,
+            indent=2
         )
 
 
