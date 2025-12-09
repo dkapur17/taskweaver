@@ -111,7 +111,7 @@ def prepare_datasets(
         is_chat: bool, 
         train_split: str = "train", 
         test_split: str ="test",
-        run_eval:bool = True) -> Tuple[Dataset, Optional[Dataset]]:
+        run_eval:bool = True) -> Tuple[Dataset, Optional[Dataset], str]:
     """
     Get train and test datasets
     """
@@ -125,7 +125,7 @@ def prepare_datasets(
     config = DatasetMixer(datasets, seed=mixer_config.seed, stopping_strategy=mixer_config.stopping_strategy)
     train_dataset = config.load_and_process(is_chat, train_split)
     test_dataset = config.load_and_process(is_chat, test_split) if run_eval else None
-    return train_dataset, test_dataset
+    return train_dataset, test_dataset, config.id()
 
 
 def main():
@@ -154,7 +154,7 @@ def main():
 
     lm, tokenizer = load_model_and_tokenizer(args.model)
 
-    train_dataset, test_dataset = prepare_datasets(
+    train_dataset, test_dataset, dataconfig_id = prepare_datasets(
                                     datasets=args.datasets, 
                                     ignore_list=args.ignore_datasets,
                                     mixer_config=args.mixer,
@@ -181,9 +181,8 @@ def main():
     pad_token = tokenizer.pad_token or tokenizer.eos_token
     pad_token_id = tokenizer.convert_tokens_to_ids(pad_token)
     collator = DataCollatorWithPromptLength(pad_token_id=pad_token_id)
-
-    run_identifier = f"d{args.hypernet.hidden_dim}_r{args.hypernet.lora_rank}_a{args.hypernet.lora_alpha}"
-    output_dir = os.path.join(args.output_dir, args.model.replace('/', '_'), run_identifier)
+    model_identifier = f"{dataconfig_id}_d{args.hypernet.hidden_dim}_r{args.hypernet.lora_rank}_a{args.hypernet.lora_alpha}"
+    output_dir = os.path.join(args.output_dir, args.model.replace('/', '_'), model_identifier)
 
     trainer_args = TrainingArguments(
         output_dir=output_dir,

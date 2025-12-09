@@ -60,10 +60,7 @@ def parse_args() -> Namespace:
     parser.add_argument('--lora.target_modules', type=str, nargs='+', default=['q_proj', 'v_proj'], help='Target modules for LoRA (can specify multiple)')
 
     args = parser.parse_args()
-
-    # Print all arguments neatly
     print_args(args)
-
     return args
 
 def get_dataset_configs(datasets: List[str], ignore_list: List[str], mixer_config: MixerConfig) -> List[Type[DatasetConfig]]:

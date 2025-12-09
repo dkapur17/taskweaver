@@ -1,3 +1,5 @@
+# Idea: Take model path, replace _models with _results, make directory and save
+
 import os
 import sys
 import torch
@@ -14,7 +16,8 @@ from peft import PeftModel
 from eval import Evaluator
 from dsconf import DatasetConfig
 from hypernet import TaskWeaver
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
+from utils import print_args, serialize_args
 from dotenv import load_dotenv
 
 load_dotenv('../.env')
@@ -150,21 +153,19 @@ def parse_args() -> Namespace:
     parser.add_class_arguments(EvaluatorConfig, 'evaluator', help="Evaluator configuration")
     parser.add_argument('--output_dir', type=str, default='_results', help="Directory to save evaluation outputs")
     parser.add_argument('--no_save', action='store_true', help="Disable automatic saving of results")
-    return parser.parse_args()
+    
+    args = parser.parse_args()
+    print_args(args)
+    return args
 
 if __name__ == "__main__":
     args = parse_args()
 
-    # Capture the command that was run
-    command = ' '.join(sys.argv)
-    
     # Start timing
     start_time = time.time()
     start_datetime = datetime.now()
 
     model, tokenizer = get_model_and_tokenizer(args.model_path, args.model_type, args.device)
-    # args.datasets = [dataset for dataset in args.datasets[0].split(" ")]
-    # args.ignore_datasets = [dataset for dataset in args.ignore_datasets[0].split(" ")]
     print("Running: ", args.datasets)
     print("Ignoring: ",  args.ignore_datasets)
     dataset_configs = get_dataset_configs(args.datasets, args.ignore_datasets)
@@ -201,15 +202,8 @@ if __name__ == "__main__":
         
         # Prepare metadata
         metadata = {
-            'command': command,
-            'model_path': args.model_path,
-            'model_type': args.model_type,
-            'datasets': args.datasets,
-            'split': args.split,
-            'batch_size': args.evaluator.batch_size,
-            'max_new_tokens': args.evaluator.max_new_tokens,
-            'temperature': args.evaluator.temperature,
-            'num_pass': args.evaluator.num_pass,
+            'command': 'python ' + ' '.join(sys.argv),
+            'configuration': serialize_args(args),
             'is_chat': is_chat,
             'timestamp': timestamp,
             'runtime': {

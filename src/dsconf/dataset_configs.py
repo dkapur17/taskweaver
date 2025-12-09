@@ -725,7 +725,7 @@ class DatasetMixer(DatasetConfig):
         ids = [c.id().replace("/", "_").replace(".", "_") for c in self._dataset_configs]
         if len(ids) <= 3:
             return "mix_" + "_".join(ids)
-        return f"mix_{len(ids)}_datasets"
+        return f"mix_{len(ids)}"
     
     # === Additional utility methods ===
     

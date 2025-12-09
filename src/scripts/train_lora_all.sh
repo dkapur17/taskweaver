@@ -2,9 +2,9 @@
 
 # All datasets except held out datasets
 
-echo "Finetuning Pythia 70M on all datasets"
+echo "Training LoRA adapters for Pythia 70M on all datasets"
 
-python finetune.py \
+python train_lora.py \
 --model EleutherAI/pythia-70m \
 --datasets all \
 --ignore_datasets tau/commonsense_qa ChilleD/SVAMP ehovy/race.middle \
@@ -16,21 +16,21 @@ python finetune.py \
 --dataset.train_split train[:10000]
 
 
-echo "Finetuning Gemma3 270M on all datasets"
-python finetune.py \
+echo "Training LoRA adapters for Gemma3 270M on all datasets"
+python train_lora.py \
 --model google/gemma-3-270m-it \
 --datasets all \
 --ignore_datasets tau/commonsense_qa ChilleD/SVAMP ehovy/race.middle \
 --lora.target_modules q_proj v_proj \
 --lora.rank 2 \
 --lora.alpha 8 \
---train.per_device_train_batch_size 8 \
---train.gradient_accumulation_steps 2 \
+--train.per_device_train_batch_size 4 \
+--train.gradient_accumulation_steps 4 \
 --dataset.train_split train[:10000]
 
 
-echo "Finetuning Qwen3 0.6B 270M on all datasets"
-python finetune.py \
+echo "Training LoRA adapters for Qwen3 0.6B on all datasets"
+python train_lora.py \
 --model Qwen/Qwen3-0.6B \
 --datasets all \
 --ignore_datasets tau/commonsense_qa ChilleD/SVAMP ehovy/race.middle \
@@ -41,10 +41,10 @@ python finetune.py \
 --train.gradient_accumulation_steps 4 \
 --dataset.train_split train[:10000]
 
-# Mixed dataset finetuning
+# Mixed dataset except held out sets
 
-echo "Finetuning Pythia 70M on mixed dataset"
-python finetune.py \
+echo "Training LoRA adapters for Pythia 70M on mixed dataset"
+python train_lora.py \
 --model EleutherAI/pythia-70m \
 --datasets mix \
 --ignore_datasets tau/commonsense_qa ChilleD/SVAMP ehovy/race.middle \
@@ -56,21 +56,21 @@ python finetune.py \
 --dataset.train_split train[:10000]
 
 
-echo "Finetuning Gemma3 270M on all datasets"
-python finetune.py \
+echo "Training LoRA adapters for Gemma3 270M on all datasets"
+python train_lora.py \
 --model google/gemma-3-270m-it \
 --datasets mix \
 --ignore_datasets tau/commonsense_qa ChilleD/SVAMP ehovy/race.middle \
 --lora.target_modules q_proj v_proj \
 --lora.rank 2 \
 --lora.alpha 8 \
---train.per_device_train_batch_size 8 \
---train.gradient_accumulation_steps 2 \
+--train.per_device_train_batch_size 4 \
+--train.gradient_accumulation_steps 4 \
 --dataset.train_split train[:10000]
 
 
-echo "Finetuning Qwen3 0.6B 270M on all datasets"
-python finetune.py \
+echo "Training LoRA adapters for Qwen3 0.6B on all datasets"
+python train_lora.py \
 --model Qwen/Qwen3-0.6B \
 --datasets mix \
 --ignore_datasets tau/commonsense_qa ChilleD/SVAMP ehovy/race.middle \

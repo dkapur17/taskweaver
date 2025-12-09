@@ -1,41 +1,41 @@
 # Ablation 1: Model scale
 
-# python train_hypernet.py \
-# --model EleutherAI/pythia-70m \
-# --datasets all \
-# --hypernet.hidden_dim 512 \
-# --hypernet.lora_rank 2 \
-# --hypernet.lora_alpha 8 \
-# --train.num_train_epochs 1 \
-# --train.per_device_train_batch_size 8 \
-# --train.gradient_accumulation_steps 2 \
-# --hypernet.target_modules query_key_value
-# # 3.95% trainable parameters
+python train_hypernet.py \
+--model EleutherAI/pythia-70m \
+--datasets all \
+--hypernet.hidden_dim 512 \
+--hypernet.lora_rank 2 \
+--hypernet.lora_alpha 8 \
+--train.num_train_epochs 1 \
+--train.per_device_train_batch_size 8 \
+--train.gradient_accumulation_steps 2 \
+--hypernet.target_modules query_key_value
+# 3.95% trainable parameters
 
-# python train_hypernet.py \
-# --model google/gemma-3-270m-it \
-# --datasets all \
-# --hypernet.hidden_dim 512 \
-# --hypernet.lora_rank 2 \
-# --hypernet.lora_alpha 8 \
-# --train.num_train_epochs 1 \
-# --train.per_device_train_batch_size 4 \
-# --train.gradient_accumulation_steps 4 \
-# --hypernet.target_modules q_proj v_proj
-# # 1.29% trainable parameters
+python train_hypernet.py \
+--model google/gemma-3-270m-it \
+--datasets all \
+--hypernet.hidden_dim 512 \
+--hypernet.lora_rank 2 \
+--hypernet.lora_alpha 8 \
+--train.num_train_epochs 1 \
+--train.per_device_train_batch_size 4 \
+--train.gradient_accumulation_steps 4 \
+--hypernet.target_modules q_proj v_proj
+# 1.29% trainable parameters
 
 
-# python train_hypernet.py \
-# --model Qwen/Qwen3-0.6B \
-# --datasets all \
-# --hypernet.hidden_dim 512 \
-# --hypernet.lora_rank 2 \
-# --hypernet.lora_alpha 8 \
-# --train.num_train_epochs 1 \
-# --train.per_device_train_batch_size 2 \
-# --train.gradient_accumulation_steps 8 \
-# --hypernet.target_modules q_proj v_proj
-# # 1.05% trainable parameters
+python train_hypernet.py \
+--model Qwen/Qwen3-0.6B \
+--datasets all \
+--hypernet.hidden_dim 512 \
+--hypernet.lora_rank 2 \
+--hypernet.lora_alpha 8 \
+--train.num_train_epochs 1 \
+--train.per_device_train_batch_size 2 \
+--train.gradient_accumulation_steps 8 \
+--hypernet.target_modules q_proj v_proj
+# 1.05% trainable parameters
 
 # Ablation 2: Hypernet Hidden Dimension
 
