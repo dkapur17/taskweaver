@@ -109,7 +109,11 @@ class Task:
             model_inputs = tokenizer(model_input_texts_repeated, return_tensors='pt', padding=True).to(model.device)
             
             # Generate all predictions in parallel
-            model_outputs = model.generate(**model_inputs, max_new_tokens=max_new_tokens, temperature=temperature, do_sample=True)
+            model_outputs = model.generate(**model_inputs, 
+                                           max_new_tokens=max_new_tokens, 
+                                           temperature=temperature, 
+                                           do_sample=True,
+                                           pad_token_id=tokenizer.pad_token_id)
             
             # Decode all predictions
             all_preds = []

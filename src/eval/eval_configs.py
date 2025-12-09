@@ -178,27 +178,43 @@ class MultipleChoiceConfig(EvaluationConfig):
     eval_type = "MULTIPLE_CHOICE"
 
     def __init__(self, choices: List[str] = ['A', 'B', 'C', 'D', 'E']):
-        self.choices = [c.upper() for c in choices]
+        self.choices = [c for c in choices]
     
     def parse_prediction(self, pred: str) -> Optional[str]:
-        """Extract the choice letter from prediction"""
-        pred = pred.strip().upper()
+        """Extract the choice letter from prediction."""
+        pred = pred.strip()
         
-        # Try to find first valid choice letter
-        for char in pred:
-            if char in self.choices:
-                return char
+        # Valid cases
+        as_is = [c for c in self.choices]
+        paran = [f"{c})" for c in self.choices]
+        dot = [f"{c}." for c in self.choices]
+
+        # Exact match
+        if pred in as_is:
+            return pred
+        if pred in paran:
+            return pred[:-1]
+        if pred in dot:
+            return pred[:-1]
         
-        # Try to find pattern like "A." or "A)"
-        for choice in self.choices:
-            if f"{choice}." in pred or f"{choice})" in pred:
+        # Starts or ends with
+        for choice in as_is:
+            if pred.startswith(choice) or pred.endswith(choice):
                 return choice
         
-        return None  # No valid choice found
+        for choice in paran:
+            if pred.startswith(choice) or pred.endswith(choice):
+                return choice[:-1]
+        
+        for choice in dot:
+            if pred.startswith(choice) or pred.endswith(choice):
+                return choice[:-1]
+        
+        return None
     
     def parse_reference(self, ref: str) -> str:
         """Reference should already be a letter"""
-        return ref.strip().upper()
+        return ref.strip()
     
     def is_correct(self, prediction: Optional[str], reference: str) -> bool:
         return prediction == reference

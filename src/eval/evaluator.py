@@ -1,7 +1,7 @@
+import os
 from typing import List, Dict, Optional, Union, Any
 from dataclasses import dataclass, asdict
 import json
-from pathlib import Path
 from datetime import datetime
 from .task import Task
 from .eval_configs import EvaluationResult
@@ -281,80 +281,66 @@ class Evaluator:
             pass_at_k_metrics=pass_at_k_metrics,
             average_pass_at_k=average_pass_at_k
         )
-    
-    def save_results(self, filepath: Union[str, Path], metadata: Optional[Dict[str, Any]] = None) -> None:
+
+    def save_results(self, output_dir: str, metadata: Optional[Dict[str, Any]] = None) -> None:
         """
         Save evaluation results with full I/O data to JSON file
         
         Args:
-            filepath: Path to save results
+            output_dir: Directory to save results to
             metadata: Optional metadata dict to include in output
         """
+
         if not self.results:
             raise ValueError("No results available. Run evaluate() first.")
         
-        filepath = Path(filepath)
-        filepath.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Convert results to serializable format
-        serializable_results = {}
         for task_name, result in self.results.items():
-            # Group each sample's data together
+
             samples = []
             for i in range(result.num_samples):
-                # Compute correctness for this sample
                 is_correct = None
-                pass_at_k_correct = None
-                
                 if result.parsed_predictions and result.parsed_references:
                     parsed_pred = result.parsed_predictions[i]
                     parsed_ref = result.parsed_references[i]
-                    
+
                     if result.num_pass > 1:
-                        # K-pass: check if any prediction is correct
-                        pass_at_k_correct = any(p == parsed_ref for p in parsed_pred)
-                        is_correct = (parsed_pred[0] == parsed_ref)  # First attempt
+                        is_correct = any(p == parsed_ref for p in parsed_pred)
                     else:
                         is_correct = (parsed_pred == parsed_ref)
-                
+
                 sample = {
                     'input': result.inputs[i],
                     'prediction': result.predictions[i],
                     'reference': result.references[i],
-                    'parsed_prediction': str(result.parsed_predictions[i]) if result.parsed_predictions else None,
-                    'parsed_reference': str(result.parsed_references[i]) if result.parsed_references else None,
-                    'correct': is_correct,
+                    'parsed_prediction': result.parsed_predictions[i] if result.parsed_predictions else None,
+                    'parsed_reference': result.parsed_references[i] if result.parsed_references else None,
+                    'correct': is_correct
                 }
-                
-                # Add pass@K specific fields
-                if result.num_pass > 1:
-                    sample['pass_at_k_correct'] = pass_at_k_correct
-                    sample['num_pass'] = result.num_pass
-                
+
                 samples.append(sample)
             
             result_dict = {
+                'task': task_name,
                 'eval_type': result.eval_type,
                 'metrics': result.metrics,
                 'num_samples': result.num_samples,
                 'samples': samples
             }
-            
-            serializable_results[task_name] = result_dict
+
+            results_file_name = f"{task_name.replace('/', '_')}.results.json"
+            with open(os.path.join(output_dir, results_file_name), 'w') as f:
+                json.dump(result_dict, f, indent=2)
         
-        # Add summary
-        summary = self.get_summary()
-        output = {
-            'metadata': metadata or {},
-            'summary': asdict(summary),
-            'results': serializable_results
-        }
+        if metadata:
+            with open(os.path.join(output_dir, 'metadata.json'), 'w') as f:
+                json.dump(metadata, f, indent=2)
         
-        with open(filepath, 'w') as f:
-            json.dump(output, f, indent=2)
-        
+        with open(os.path.join(output_dir, 'summary.json'), 'w') as f:
+            json.dump(asdict(self.get_summary()), f, indent=2)
+
         if self.verbose:
-            print(f"Results saved to: {filepath}")
+            print(f"Saving results, metadata and summary to {output_dir}")
+
     
     def compare_with(
         self, 
