@@ -13,4 +13,10 @@ dependencies:
     - tqdm
     - accelerate
     - huggingface_hub
-    - ipykernel
+    - einops
+    - matplotlib
+    - pandas
+    - numpy
+    - seaborn
+    - python-dotenv
+    - jsonargparse
