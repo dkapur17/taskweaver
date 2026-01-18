@@ -2,6 +2,8 @@
 
 **Course Project for CMU 10-623: Generative AI (Fall 2025)**
 
+![TaskWeaver Architecture](assets/Architecture.png)
+
 TaskWeaver is a research implementation exploring hypernetwork-based approaches for **instance-level** dynamic language model adaptation. Unlike task-level approaches (e.g., Sakana AI's Text-to-LoRA) that generate fixed LoRA weights per task, TaskWeaver generates **unique LoRA weights for each individual input** on-the-fly based on the input prompt's semantic embedding. By training on diverse datasets, the hypernetwork learns to generalize and optimize model weights to maximize performance for any given input.
 
 ## Table of Contents
