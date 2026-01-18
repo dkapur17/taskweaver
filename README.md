@@ -277,7 +277,7 @@ This tests whether the hypernetwork learns a universal adaptation function that 
 | EleutherAI/pythia-70m, LoRA (Individual)  | 22.8%           | 23.7%      | 53.5%   | 1.14%   | 25.4%       | 22.4%        | 34.9%  | 49.7%            | -       | -               | -               |
 | EleutherAI/pythia-70m, LoRA (Mixed)       | 24.1%           | 22.3%      | 53.9%   | 1.97%   | 24.6%       | 26.6%        | 31.0%  | 44.3%            | 3.0%    | 18.3%           | 18.7%           |
 | EleutherAI/pythia-70m, TaskWeaver (Ours)  | 24.9%           | 23.9%      | 54.5%   | 1.67%   | 24.8%       | 28.6%        | 29.5%  | 48.4%            | 1.0%    | 19.7%           | 25.1%           |
-b| google/gemma-3-270m-it, Base              | 18.9%           | 23.0%      | 43.5%   | 4.55%   | 24.7%       | 24.6%        | 34.3%  | 50.6%            | 19.3%   | 18.4%           | 20.8%           |
+| google/gemma-3-270m-it, Base              | 18.9%           | 23.0%      | 43.5%   | 4.55%   | 24.7%       | 24.6%        | 34.3%  | 50.6%            | 19.3%   | 18.4%           | 20.8%           |
 | google/gemma-3-270m-it, LoRA (Individual) | 25.6%           | 25.0%      | 56.4%   | 3.64%   | 24.2%       | 26.4%        | 42.9%  | 53.8%            | -       | -               | -               |
 | google/gemma-3-270m-it, LoRA (Mixed)      | 25.3%           | 21.3%      | 52.0%   | 3.41%   | 23.5%       | 25.2%        | 33.3%  | 50.9%            | 4.67%   | 20.6%           | 22.8%           |
 | google/gemma-3-270m-it, TaskWeaver (Ours) | 21.1%           | 23.7%      | 45.7%   | 5.84%   | 24.5%       | 27.6%        | 34.7%  | 47.8%            | 16.3%   | 21.5%           | 23.0%           |
